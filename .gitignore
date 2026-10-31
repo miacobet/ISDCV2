@@ -5,3 +5,6 @@ isdc_tool.db
 .DS_Store
 *.xlsx
 *.pdf
+*.backup-*.db
+.venv/
+demo_output/
