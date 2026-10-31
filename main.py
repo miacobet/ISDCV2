@@ -129,10 +129,13 @@ def handle_exception(exc_type, exc_value, exc_tb):
 def main():
     sys.excepthook = handle_exception
 
+    # High-DPI attributes must be set before the QApplication is created.
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
     app = QApplication(sys.argv)
     app.setApplicationName("ISDC Decommissioning Cost Estimation Tool")
     app.setStyleSheet(APP_STYLESHEET)
-    app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 
     db = DatabaseManager("isdc_tool.db")
     db.initialize()

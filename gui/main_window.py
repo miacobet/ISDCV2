@@ -9,7 +9,7 @@ import traceback
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget,
     QListWidgetItem, QPushButton, QTabWidget, QLabel, QDialog, QMessageBox,
-    QAction, QMenuBar, QSplitter
+    QAction, QSplitter
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.setElideMode(Qt.ElideNone)
         self.tabs.tabBar().setUsesScrollButtons(True)
+        self.tabs.tabBar().setExpanding(False)
         self.tab_setup = ProjectSetupTab(self.db, self)
         self.tab_matrix = CostMatrixTab(self.db, self)
         self.tab_phases = PhasesTab(self.db, self)
