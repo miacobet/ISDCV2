@@ -17,10 +17,10 @@ from PyQt5.QtGui import QFont
 
 from core.database import DatabaseManager
 from core.facility_profiles import is_power_reactor
-from core.calculator import ISDCCalculator, ESTIMATE_ACCURACY, REFERENCE_TARIFFS_NOTE
+from core.calculator import ISDCCalculator, ESTIMATE_ACCURACY, REFERENCE_TARIFFS, REFERENCE_TARIFFS_NOTE
 from core.funding_plan import (
     FREQUENCIES, PLAN_METHOD_NOTE, compute_funding_plan, cost_profile_for_project,
-    inputs_from_project, sensitivity,
+    inputs_from_project, levy_for_project, sensitivity,
 )
 from export import excel_export, pdf_export
 
@@ -173,6 +173,7 @@ class ReportsTab(QWidget):
             "fp_growth_pct": self.fp_growth.value(),
         })
         self._show_funding_plan(self.db.get_project(self.project_id))
+        self._on_calculate_mwh()  # the levy is derived from the plan
         if self.main_window:
             self.main_window.statusBar().showMessage("Funding plan saved.", 4000)
 
@@ -226,38 +227,39 @@ class ReportsTab(QWidget):
     def _build_mwh_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        note = QLabel(REFERENCE_TARIFFS_NOTE)
+        note = QLabel(
+            "Levy per MWh generated that pays the contributions of the saved Funding Plan. "
+            "Annual energy and your national decommissioning tariff are taken from "
+            "Project Setup > Power Unit (MWh); fund inputs from Reports > Funding Plan."
+        )
         note.setWordWrap(True)
-        note.setStyleSheet("color:#5a7a9a; font-style:italic; font-size:10px;")
+        note.setStyleSheet("color:#5a7a9a; font-style:italic; font-size:11px;")
         layout.addWidget(note)
 
-        form = QFormLayout()
-        self.sp_mwh_energy = QDoubleSpinBox()
-        self.sp_mwh_energy.setRange(0, 1e8)
-        self.sp_mwh_energy.setSuffix(" MWh/yr")
-        form.addRow("Annual energy production", self.sp_mwh_energy)
-
-        self.sp_mwh_years = QDoubleSpinBox()
-        self.sp_mwh_years.setRange(0, 100)
-        self.sp_mwh_years.setDecimals(1)
-        form.addRow("Remaining operational years", self.sp_mwh_years)
-
-        self.sp_mwh_fund = QDoubleSpinBox()
-        self.sp_mwh_fund.setRange(0, 1e13)
-        self.sp_mwh_fund.setSuffix(" EUR")
-        form.addRow("Current fund balance", self.sp_mwh_fund)
-
-        layout.addLayout(form)
-
-        btn = QPushButton("Calculate Required Levy")
+        btn = QPushButton("Recalculate Levy")
         btn.clicked.connect(self._on_calculate_mwh)
         layout.addWidget(btn)
 
+        top = QHBoxLayout()
         self.lbl_mwh_result = QLabel("")
         self.lbl_mwh_result.setWordWrap(True)
+        self.lbl_mwh_result.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.lbl_mwh_result.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.lbl_mwh_result.setStyleSheet("font-family: Menlo, Consolas, \"Courier New\", monospace; font-size: 11px;")
-        layout.addWidget(self.lbl_mwh_result)
-        layout.addStretch()
+        top.addWidget(self.lbl_mwh_result, 3)
+
+        self.mwh_table = QTableWidget(0, 3)
+        self.mwh_table.setHorizontalHeaderLabels(["Year", "Contribution (EUR)", "Levy (EUR/MWh)"])
+        self.mwh_table.verticalHeader().setVisible(False)
+        self.mwh_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.mwh_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        top.addWidget(self.mwh_table, 2)
+        layout.addLayout(top, 1)
+
+        ref = QLabel(REFERENCE_TARIFFS_NOTE)
+        ref.setWordWrap(True)
+        ref.setStyleSheet("color:#5a7a9a; font-style:italic; font-size:10px;")
+        layout.addWidget(ref)
         self._mwh_tab_index = self.inner_tabs.addTab(tab, "EUR/MWh Levy")
 
     def _build_export_tab(self):
@@ -295,11 +297,10 @@ class ReportsTab(QWidget):
         self.project_id = project_id
         project = self.db.get_project(project_id)
         if project:
-            self.sp_mwh_energy.setValue(float(project.get("annual_energy_mwh") or 0))
-            self.sp_mwh_years.setValue(float(project.get("remaining_op_years") or 0))
             self._load_funding_plan_inputs(project)
             # The EUR/MWh levy only makes sense for electricity-generating facilities.
             self.inner_tabs.setTabVisible(self._mwh_tab_index, is_power_reactor(project.get("facility_type")))
+            self._on_calculate_mwh()
         self._on_calculate()
 
     def _get_calc(self):
@@ -307,27 +308,63 @@ class ReportsTab(QWidget):
         return ISDCCalculator(dict(project) if project else {}, self.db), project
 
     def _on_calculate_mwh(self):
+        self.mwh_table.setRowCount(0)
         if not self.project_id:
             return
-        calc, project = self._get_calc()
-        result = calc.compute_mwh_levy(
-            self.sp_mwh_energy.value(), self.sp_mwh_years.value(), self.sp_mwh_fund.value(),
-        )
-        currency = (project.get("local_currency") or "EUR") if project else "EUR"
+        project = self.db.get_project(self.project_id)
+        if not project or not is_power_reactor(project.get("facility_type")):
+            return
+        if not project.get("fp_shutdown_year"):
+            self.lbl_mwh_result.setText("Set up and save the Funding Plan first (Reports > Funding Plan).")
+            return
+        if not float(project.get("annual_energy_mwh") or 0):
+            self.lbl_mwh_result.setText("Enter the annual energy production in "
+                                        "Project Setup > Power Unit (MWh).")
+            return
+        res = levy_for_project(project, self.db)
+        if not res:
+            self.lbl_mwh_result.setText("No costs entered yet — nothing to fund.")
+            return
+        currency = project.get("local_currency") or "EUR"
+        rate = float(project.get("local_rate") or 1.0)
         lines = [
-            f"Remaining liability:          {result.remaining_liability_eur:>16,.0f} EUR",
-            f"Required annual fund contribution: {result.annual_fund_contribution_eur:>12,.0f} EUR",
-            f"Required levy:                 {result.required_levy_eur_per_mwh:>16,.4f} EUR/MWh",
+            f"Annual energy production:       {res.annual_energy_mwh:>16,.0f} MWh/yr",
+            "",
+            f"Required levy, first year:      {res.first_year_levy:>16,.3f} EUR/MWh",
         ]
-        if currency and currency != "EUR":
-            lines.append(f"Required levy:                 {result.required_levy_local_per_mwh:>16,.4f} {currency}/MWh")
+        if abs(res.last_year_levy - res.first_year_levy) > 1e-6:
+            lines.append(f"Required levy, last year:       {res.last_year_levy:>16,.3f} EUR/MWh")
+            lines.append("  (payments grow each year as set in the Funding Plan)")
+        lines.append(f"Constant levy (same every year):{res.constant_levy:>16,.3f} EUR/MWh")
+        if currency != "EUR":
+            lines.append(f"  = {res.first_year_levy * rate:,.3f} {currency}/MWh first year, "
+                         f"{res.constant_levy * rate:,.3f} {currency}/MWh constant")
+        lines.append("")
+        if res.user_tariff_sufficient is None:
+            lines.append("National decommissioning tariff: not entered (Project Setup > Power Unit).")
+        else:
+            lines.append(f"National decommissioning tariff:{res.user_tariff:>16,.3f} EUR/MWh")
+            if res.user_tariff_sufficient:
+                lines.append(f"  SUFFICIENT — fund ends with {res.user_tariff_final_balance_eur:,.0f} EUR")
+            else:
+                lines.append(f"  NOT SUFFICIENT — fund falls short by up to "
+                             f"{res.user_tariff_shortfall_eur:,.0f} EUR")
         lines += [
             "",
-            "Reference tariffs (informational only, see note above):",
-            f"  Decommissioning: {result.reference_decom_tariff_low:.2f} - {result.reference_decom_tariff_high:.2f} EUR/MWh",
-            f"  Radioactive waste: {result.reference_waste_tariff_low:.2f} - {result.reference_waste_tariff_high:.2f} EUR/MWh",
+            "Reference ranges (informational only):",
+            f"  Decommissioning:   {REFERENCE_TARIFFS['decom_eur_per_mwh_low']:.2f} - "
+            f"{REFERENCE_TARIFFS['decom_eur_per_mwh_high']:.2f} EUR/MWh",
+            f"  Radioactive waste: {REFERENCE_TARIFFS['waste_eur_per_mwh_low']:.2f} - "
+            f"{REFERENCE_TARIFFS['waste_eur_per_mwh_high']:.2f} EUR/MWh",
         ]
         self.lbl_mwh_result.setText("\n".join(lines))
+        self.mwh_table.setRowCount(len(res.years))
+        for row, y in enumerate(res.years):
+            for col, text in enumerate((str(y.year), f"{y.contribution_eur:,.0f}", f"{y.levy_eur_per_mwh:,.3f}")):
+                item = QTableWidgetItem(text)
+                if col:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.mwh_table.setItem(row, col, item)
 
     def _on_calculate(self):
         if not self.project_id:

@@ -132,16 +132,6 @@ class TestCalculator(DBTestCase):
         self.assertAlmostEqual(sum(p.total_cost_eur for p in profiles), 2000)
         self.assertAlmostEqual(calc.compute_financials().npv_total, a.npv_cost_eur + b.npv_cost_eur)
 
-    def test_mwh_levy(self):
-        pid, project = self.new_project(discount_rate=3.0, local_rate=5.0)
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1_000_000, 0, 0, 0)
-        m = ISDCCalculator(project, self.db).compute_mwh_levy(10_000, 20, 0)
-        annuity = (1 - 1.03 ** -20) / 0.03
-        self.assertAlmostEqual(m.annual_fund_contribution_eur, 1_000_000 / annuity)
-        self.assertAlmostEqual(m.required_levy_eur_per_mwh, 1_000_000 / annuity / 10_000)
-        self.assertAlmostEqual(m.required_levy_local_per_mwh, m.required_levy_eur_per_mwh * 5)
-        self.assertEqual(ISDCCalculator(project, self.db).compute_mwh_levy(0, 20, 0).required_levy_eur_per_mwh, 0)
-
 
 # ---------------------------------------------------------------------
 class TestExports(DBTestCase):
@@ -229,6 +219,37 @@ class TestFundingPlan(DBTestCase):
         level = self.plan({2050: 1e9}).payment_per_period
         growing = self.plan({2050: 1e9}, contribution_growth_pct=2).payment_per_period
         self.assertLess(growing, level)
+
+    def test_levy_from_plan(self):
+        from core.funding_plan import FundingPlanInputs, compute_levy
+        inp = FundingPlanInputs(2026, 2046, 2026, fund_return_pct=0, cost_escalation_pct=0,
+                                annual_energy_mwh=1e6)
+        r = compute_levy(inp, {2050: 2e9}, user_tariff=5)
+        self.assertAlmostEqual(r.first_year_levy, 100, places=3)      # 100 M/yr over 1 TWh
+        self.assertAlmostEqual(r.constant_levy, 100, places=3)
+        self.assertEqual(len(r.years), 20)
+        self.assertFalse(r.user_tariff_sufficient)
+        self.assertAlmostEqual(r.user_tariff_shortfall_eur, 1.9e9, delta=1)
+        self.assertTrue(compute_levy(inp, {2050: 2e9}, user_tariff=100).user_tariff_sufficient)
+        self.assertIsNone(compute_levy(FundingPlanInputs(2026, 2046, 2026), {2050: 1e9}))  # no energy
+
+    def test_levy_grows_with_payments(self):
+        from core.funding_plan import FundingPlanInputs, compute_levy
+        inp = FundingPlanInputs(2026, 2046, 2026, fund_return_pct=4, cost_escalation_pct=2,
+                                contribution_growth_pct=2, annual_energy_mwh=5e6)
+        r = compute_levy(inp, {2050: 1e9})
+        self.assertGreater(r.last_year_levy, r.first_year_levy)
+        self.assertLess(r.first_year_levy, r.constant_levy)            # growing plan starts lower
+        self.assertGreater(r.last_year_levy, r.constant_levy)
+
+    def test_levy_only_for_power_reactors(self):
+        from core.funding_plan import levy_for_project
+        for ft, expected in (("NPP-PWR", True), ("FCF-UF", False)):
+            pid, _ = self.new_project(facility_type=ft, annual_energy_mwh=5e6)
+            self.db.save_cost_entry(pid, "03.01.01", 3, 1e6, 0, 0, 0)
+            self.db.update_project(pid, {"fp_start_year": 2026, "fp_shutdown_year": 2040,
+                                         "fp_return_pct": 3, "fp_escalation_pct": 2})
+            self.assertEqual(levy_for_project(self.db.get_project(pid), self.db) is not None, expected, ft)
 
     def test_large_opening_balance_needs_nothing(self):
         r = self.plan({2050: 1e9}, opening_balance_eur=2e9)
@@ -457,6 +478,14 @@ class TestGUISmoke(DBTestCase):
         w._load_project(npp)
         self.assertTrue(st.inner_tabs.isTabVisible(st._power_tab_index))
         self.assertTrue(rt.inner_tabs.isTabVisible(rt._mwh_tab_index))
+        self.assertIn("Funding Plan first", rt.lbl_mwh_result.text())   # levy needs a saved plan
+        self.db.save_cost_entry(npp, "03.01.01", 3, 1e6, 0, 0, 0)
+        self.db.update_project(npp, {"annual_energy_mwh": 5e6, "user_decom_tariff": 0.01,
+                                     "fp_start_year": 2026, "fp_shutdown_year": 2040})
+        w._load_project(npp)
+        self.assertIn("EUR/MWh", rt.lbl_mwh_result.text())
+        self.assertIn("NOT SUFFICIENT", rt.lbl_mwh_result.text())
+        self.assertEqual(rt.mwh_table.rowCount(), 14)                  # 2026..2039
         w.close()
 
     def test_cost_matrix_applicability_editing(self):

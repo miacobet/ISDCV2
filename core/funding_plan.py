@@ -264,6 +264,83 @@ def sensitivity(inp: FundingPlanInputs, cost_profile: Dict[int, float],
             for label, i, p in cases]
 
 
+# ---------------------------------------------------------------------
+# EUR/MWh levy derived from the funding plan (power reactors)
+# ---------------------------------------------------------------------
+@dataclass
+class LevyYear:
+    year: int
+    contribution_eur: float
+    levy_eur_per_mwh: float
+
+
+@dataclass
+class LevyResult:
+    annual_energy_mwh: float
+    first_year_levy: float            # EUR/MWh, as the plan is entered
+    last_year_levy: float             # EUR/MWh in the last contribution year
+    constant_levy: float              # EUR/MWh if the levy stays the same every year
+    years: List[LevyYear]
+    user_tariff: float                # EUR/MWh entered by the user (0 = none)
+    user_tariff_sufficient: Optional[bool]
+    user_tariff_shortfall_eur: float  # largest negative fund balance with the user tariff
+    user_tariff_final_balance_eur: float
+
+
+def compute_levy(inp: FundingPlanInputs, cost_profile: Dict[int, float],
+                 user_tariff: float = 0.0) -> Optional[LevyResult]:
+    """Levy per MWh generated that pays the funding plan contributions.
+
+    Assumes the stated annual energy is generated in every contribution
+    year (start year up to the year before shutdown).
+    """
+    energy = inp.annual_energy_mwh
+    if energy <= 0:
+        return None
+    from dataclasses import replace
+    plan = compute_funding_plan(inp, cost_profile)
+    years = []
+    for s in plan.schedule:
+        if s.year < inp.shutdown_year:
+            years.append(LevyYear(s.year, s.contributions, s.contributions / energy))
+    level = compute_funding_plan(replace(inp, contribution_growth_pct=0.0), cost_profile)
+
+    sufficient, shortfall, final = None, 0.0, 0.0
+    if user_tariff > 0:
+        ppy = FREQUENCIES.get(inp.frequency, 1)
+        balances, _ = _simulate(replace(inp, contribution_growth_pct=0.0), cost_profile,
+                                user_tariff * energy / ppy)
+        lowest = min(balances) if balances else 0.0
+        sufficient = lowest >= -1.0
+        shortfall = max(-lowest, 0.0)
+        final = balances[-1] if balances else 0.0
+    return LevyResult(
+        annual_energy_mwh=energy,
+        first_year_levy=years[0].levy_eur_per_mwh if years else 0.0,
+        last_year_levy=years[-1].levy_eur_per_mwh if years else 0.0,
+        constant_levy=level.first_year_annual_contribution / energy,
+        years=years,
+        user_tariff=user_tariff,
+        user_tariff_sufficient=sufficient,
+        user_tariff_shortfall_eur=shortfall,
+        user_tariff_final_balance_eur=final,
+    )
+
+
+def levy_for_project(project: Dict, db) -> Optional[LevyResult]:
+    """Levy for a stored project; None unless it is a power reactor with a
+    saved funding plan and annual energy entered."""
+    if not is_power_reactor(project.get("facility_type")):
+        return None
+    inp = inputs_from_project(project)
+    if not inp:
+        return None
+    profile = cost_profile_for_project(project, db)
+    if not profile:
+        return None
+    return compute_levy(inp, profile, float(project.get("user_decom_tariff") or 0.0))
+
+
 PLAN_METHOD_NOTE = (
     "Generic sinking-fund method. Costs (base-year prices) are spread over the phase years, "
     "escalated to the year they are spent, and paid monthly from the fund. The fund earns the "

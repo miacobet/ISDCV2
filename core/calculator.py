@@ -99,18 +99,6 @@ class PhaseProfile:
     npv_cost_eur: float = 0.0
 
 
-@dataclass
-class MWhCalculation:
-    annual_fund_contribution_eur: float = 0.0
-    required_levy_eur_per_mwh: float = 0.0
-    required_levy_local_per_mwh: float = 0.0
-    reference_decom_tariff_low: float = 0.0
-    reference_decom_tariff_high: float = 0.0
-    reference_waste_tariff_low: float = 0.0
-    reference_waste_tariff_high: float = 0.0
-    remaining_liability_eur: float = 0.0
-
-
 class ISDCCalculator:
     def __init__(self, project: Dict[str, Any], db):
         self.project = project or {}
@@ -225,36 +213,3 @@ class ISDCCalculator:
                 total_cost_eur=cost_eur, npv_cost_eur=npv_cost,
             ))
         return profiles
-
-    # ------------------------------------------------------------------
-    def compute_mwh_levy(self, annual_energy_mwh: float, remaining_operational_years: float,
-                          current_fund_balance_eur: float, user_decom_tariff: float = 0.0,
-                          user_waste_tariff: float = 0.0) -> MWhCalculation:
-        financials = self.compute_financials()
-        total_cost_eur = financials.grand_total_eur
-        remaining_liability_eur = max(total_cost_eur - current_fund_balance_eur, 0.0)
-
-        discount_rate = self._discount_rate()
-        years = max(remaining_operational_years, 0.0)
-        if years > 0 and discount_rate > 0:
-            annuity_factor = (1 - (1 + discount_rate) ** (-years)) / discount_rate
-        else:
-            annuity_factor = years if years > 0 else 1.0
-
-        annual_fund_contribution_eur = remaining_liability_eur / annuity_factor if annuity_factor > 0 else remaining_liability_eur
-
-        required_levy_eur_per_mwh = (
-            annual_fund_contribution_eur / annual_energy_mwh if annual_energy_mwh > 0 else 0.0
-        )
-        rate = self._rate()
-
-        result = MWhCalculation()
-        result.annual_fund_contribution_eur = annual_fund_contribution_eur
-        result.required_levy_eur_per_mwh = required_levy_eur_per_mwh
-        result.required_levy_local_per_mwh = required_levy_eur_per_mwh * rate
-        result.reference_decom_tariff_low = REFERENCE_TARIFFS["decom_eur_per_mwh_low"]
-        result.reference_decom_tariff_high = REFERENCE_TARIFFS["decom_eur_per_mwh_high"]
-        result.reference_waste_tariff_low = REFERENCE_TARIFFS["waste_eur_per_mwh_low"]
-        result.reference_waste_tariff_high = REFERENCE_TARIFFS["waste_eur_per_mwh_high"]
-        result.remaining_liability_eur = remaining_liability_eur
-        return result

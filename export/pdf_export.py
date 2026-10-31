@@ -24,9 +24,10 @@ from reportlab.graphics.charts.lineplots import LinePlot
 from reportlab.graphics.widgets.markers import makeMarker
 
 from core.applicability import APPLICABILITY_NOTE, WARN, build_applicability_review
-from core.calculator import ISDCCalculator, ESTIMATE_ACCURACY, REFERENCE_TARIFFS_NOTE
+from core.calculator import ISDCCalculator, ESTIMATE_ACCURACY, REFERENCE_TARIFFS, REFERENCE_TARIFFS_NOTE
 from core.funding_plan import (
-    PLAN_METHOD_NOTE, compute_funding_plan, cost_profile_for_project, inputs_from_project, sensitivity,
+    PLAN_METHOD_NOTE, compute_funding_plan, cost_profile_for_project, inputs_from_project,
+    levy_for_project, sensitivity,
 )
 from core.isdc_data import ISDC_HIERARCHY
 from core.facility_profiles import is_power_reactor
@@ -381,6 +382,43 @@ def build_funding_plan_section(db, project):
     return out
 
 
+def build_levy_section(db, project):
+    """EUR/MWh levy derived from the funding plan (power reactors)."""
+    out = [Paragraph("EUR/MWh Decommissioning Levy", H2_STYLE)]
+    res = levy_for_project(project, db)
+    if not res:
+        out.append(Paragraph("No levy calculated: a saved funding plan and the annual energy production "
+                             "are needed.", NORMAL_STYLE))
+    else:
+        rows = [
+            ["Annual energy production", f"{res.annual_energy_mwh:,.0f} MWh/yr"],
+            ["Required levy, first year", f"{res.first_year_levy:,.3f} EUR/MWh"],
+        ]
+        if abs(res.last_year_levy - res.first_year_levy) > 1e-6:
+            rows.append(["Required levy, last contribution year", f"{res.last_year_levy:,.3f} EUR/MWh"])
+        rows.append(["Constant levy (same every year)", f"{res.constant_levy:,.3f} EUR/MWh"])
+        highlight = ()
+        if res.user_tariff_sufficient is not None:
+            rows.append(["National decommissioning tariff", f"{res.user_tariff:,.3f} EUR/MWh"])
+            if res.user_tariff_sufficient:
+                rows.append(["Tariff check", f"Sufficient — fund ends with "
+                                             f"{res.user_tariff_final_balance_eur:,.0f} EUR"])
+            else:
+                rows.append(["Tariff check", f"NOT sufficient — shortfall up to "
+                                             f"{res.user_tariff_shortfall_eur:,.0f} EUR"])
+                highlight = (len(rows) - 1,)
+        rows.append(["Reference range, decommissioning (informational)",
+                     f"{REFERENCE_TARIFFS['decom_eur_per_mwh_low']:.2f} – "
+                     f"{REFERENCE_TARIFFS['decom_eur_per_mwh_high']:.2f} EUR/MWh"])
+        out.append(Spacer(1, 1 * mm))
+        out.append(_kv_table(rows, highlight_rows=highlight))
+        out.append(Spacer(1, 1 * mm))
+        out.append(Paragraph("The levy pays the funding plan contributions, assuming the stated annual "
+                             "energy is generated in every contribution year.", ITALIC_STYLE))
+    out.append(Paragraph(REFERENCE_TARIFFS_NOTE, ITALIC_STYLE))
+    return out
+
+
 def _build_assumptions_summary(db, project_id):
     rows = db.get_project_assumptions(project_id)
     total = len(rows)
@@ -440,8 +478,7 @@ def export_pdf_report(db, project_id, path, include_matrix=True):
         story.append(Spacer(1, 6 * mm))
 
     if is_power_reactor(project.get("facility_type")):
-        story.append(Paragraph("EUR/MWh Levy Reference Note", H2_STYLE))
-        story.append(Paragraph(REFERENCE_TARIFFS_NOTE, ITALIC_STYLE))
+        story.extend(build_levy_section(db, project))
         story.append(Spacer(1, 6 * mm))
 
     story.append(Paragraph("Assumptions Completeness", H2_STYLE))
