@@ -35,10 +35,13 @@ QPushButton:focus { outline: none; border: 2px solid #ffb400; }
 QTabWidget::pane { border: 1px solid #c3cfdd; background: white; }
 QTabBar::tab {
     background: #e8eef5; padding: 8px 18px; min-width: 90px;
-    border: 1px solid #c3cfdd;
+    border: 1px solid #c3cfdd; border-top: 3px solid #c3cfdd;
     border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px;
 }
-QTabBar::tab:selected { background: white; font-weight: bold; color: #1a3a5c; }
+/* Selected tab: no bold font (Qt sizes tabs for the normal font, so bold text
+   gets clipped); highlight with colour and a top accent of the same thickness. */
+QTabBar::tab:selected { background: white; color: #1a3a5c; border-top: 3px solid #2a5a8c; }
+QTabBar::tab:hover:!selected { background: #dde6f0; }
 QHeaderView::section {
     background-color: #1a3a5c; color: white; padding: 5px; border: none;
 }
