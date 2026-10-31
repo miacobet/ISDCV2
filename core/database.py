@@ -4,6 +4,7 @@ core/database.py
 SQLite persistence layer for the ISDC Decommissioning Cost Estimation Tool.
 """
 
+import os
 import sqlite3
 import datetime
 from typing import Optional, List, Dict, Any
@@ -82,6 +83,7 @@ PROJECT_COLUMNS = [
 class DatabaseManager:
     def __init__(self, db_path: str = "isdc_tool.db"):
         self.db_path = db_path
+        self.last_migration = None
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
@@ -92,6 +94,7 @@ class DatabaseManager:
     def initialize(self):
         self._create_schema()
         self._migrate_schema()
+        self._migrate_to_isdc2012()
         self._seed_isdc_hierarchy()
         self._seed_assumptions_checklist()
 
@@ -212,11 +215,23 @@ class DatabaseManager:
                 pass
         self.conn.commit()
 
+    def _migrate_to_isdc2012(self):
+        """Convert data saved with the tool's earlier, non-standard codes (one-off, with backup)."""
+        from core.migration import needs_migration, migrate
+        if not needs_migration(self.conn):
+            return
+        on_disk = self.db_path not in (":memory:", "") and os.path.exists(self.db_path)
+        self.last_migration = migrate(self.conn, self.db_path if on_disk else None)
+
     def _seed_isdc_hierarchy(self):
         c = self.conn.cursor()
-        c.execute("SELECT COUNT(*) FROM isdc_level1")
+        c.execute("SELECT COUNT(*) FROM isdc_level3 WHERE code=?", ("01.0101",))
         if c.fetchone()[0] > 0:
             return
+        # (Re)seed with the ISDC 2012 hierarchy, replacing any older structure.
+        c.execute("DELETE FROM isdc_level3")
+        c.execute("DELETE FROM isdc_level2")
+        c.execute("DELETE FROM isdc_level1")
         for pa_code, pa in ISDC_HIERARCHY.items():
             c.execute(
                 "INSERT INTO isdc_level1 (pa_code, title, description) VALUES (?, ?, ?)",

@@ -2,8 +2,8 @@
 main.py
 =======
 ISDC Decommissioning Cost Estimation Tool
-Based on the NEA/OECD International Structure for Decommissioning Costing
-of Nuclear Installations (ISDC 2012, NEA No. 7088).
+Uses the cost item hierarchy of the NEA/OECD International Structure for
+Decommissioning Costing of Nuclear Installations (ISDC 2012, NEA No. 7088).
 
 Author: Marian
 """
@@ -145,6 +145,21 @@ def main():
 
     window = MainWindow(db)
     window.show()
+
+    if db.last_migration:
+        m = db.last_migration
+        QMessageBox.information(
+            window, "Updated to the ISDC 2012 structure",
+            "Your projects were converted to the official ISDC 2012 cost structure "
+            "(NEA No. 7088, Appendix A).\n\n"
+            f"Cost entries converted: {m['entries']} (combined where several old items map to one "
+            f"ISDC item: {m['merged']}).\n"
+            f"Applicability ratings carried over: {m['overrides']}.\n\n"
+            "Each converted entry notes its old code. Former contingency items were moved to the "
+            "Contingency cost category; former income items were moved to 11.04 Asset recovery "
+            "(enter income as negative amounts).\n\n"
+            f"A backup of the previous database was saved as:\n{m['backup'] or '(not saved)'}"
+        )
 
     sys.exit(app.exec_())
 

@@ -3,9 +3,9 @@ gui/cost_matrix_tab.py
 ========================
 Tab 2 — ISDC Cost Matrix. Full three-level ISDC hierarchy with
 Labour / Investment / Expenses / Contingency entry at Level-3 (and
-Level-2, for lump-sum entries), per-entry phase allocation, and the
-graded approach: every PA / Level-2 / Level-3 item shows its
-applicability (M/D/A/C/N) for the facility type, which the user can
+Activity Group, for lump-sum entries), per-entry phase allocation, and
+the graded approach: every ISDC 2012 item shows its applicability
+(M/D/A/C/N) for the facility type and strategy, which the user can
 override with a justification.
 """
 
@@ -17,10 +17,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor, QBrush
 
-from core.applicability import WARN, build_applicability_review, level3_cost_on_not_applicable
+from core.applicability import WARN, build_applicability_review, contingency_check, level3_cost_on_not_applicable
 from core.database import DatabaseManager
 from core.facility_profiles import APPLICABILITY_LABELS, effective_applicability
-from core.isdc_data import ISDC_HIERARCHY
+from core.isdc_data import ISDC_HIERARCHY, group_of, is_income_code
 
 COLOR_DOMINANT = QColor("#fff3cd")
 COLOR_REVIEW = QColor("#ffe0e0")
@@ -45,6 +45,7 @@ class CostMatrixTab(QWidget):
         self.main_window = parent
         self.project_id = None
         self.facility_type = None
+        self.strategy = None
         self._project = None
         self._entries = {}
         self._overrides = {}
@@ -85,7 +86,7 @@ class CostMatrixTab(QWidget):
             ["Code", "Title", "Applic.", "Labour (EUR)", "Investment (EUR)", "Expenses (EUR)",
              "Contingency (EUR)", "Total (EUR)"]
         )
-        self.tree.setColumnWidth(COL_CODE, 115)
+        self.tree.setColumnWidth(COL_CODE, 135)
         self.tree.setColumnWidth(COL_TITLE, 300)
         self.tree.setColumnWidth(COL_APPL, 55)
         for col in range(COL_LABOUR, N_COLS):
@@ -183,6 +184,7 @@ class CostMatrixTab(QWidget):
         self.project_id = project_id
         project = self.db.get_project(project_id)
         self.facility_type = project.get("facility_type") if project else None
+        self.strategy = project.get("strategy") if project else None
         self._phases = self.db.get_phases(project_id)
         self.cb_phase.clear()
         self.cb_phase.addItem("(unallocated)", None)
@@ -191,7 +193,7 @@ class CostMatrixTab(QWidget):
         self._refresh_tree()
 
     def _appl_cell(self, item, code):
-        eff = effective_applicability(self.facility_type, code, self._overrides)
+        eff = effective_applicability(self.facility_type, code, self._overrides, self.strategy)
         user_here = code in self._overrides
         item.setText(COL_APPL, eff["rating"] + (" *" if user_here else ""))
         item.setTextAlignment(COL_APPL, Qt.AlignCenter)
@@ -240,9 +242,9 @@ class CostMatrixTab(QWidget):
                     l3_item.setData(0, Qt.UserRole, ("3", l3_code))
                     eff = self._appl_cell(l3_item, l3_code)
                     if eff["rating"] == "N":
-                        self._paint(l3_item, COLOR_REVIEW if total > 0 else COLOR_NOT_APPLICABLE,
-                                    None if total > 0 else COLOR_NA_TEXT)
-                    elif total > 0:
+                        self._paint(l3_item, COLOR_REVIEW if total != 0 else COLOR_NOT_APPLICABLE,
+                                    None if total != 0 else COLOR_NA_TEXT)
+                    elif total != 0:
                         self._paint(l3_item, COLOR_HAS_COST)
                     l2_item.addChild(l3_item)
                     l2_sums = [a + b for a, b in zip(l2_sums, vals)]
@@ -281,7 +283,10 @@ class CostMatrixTab(QWidget):
         issues = [f"{r.code} — {r.status}" for r in review.values() if r.severity == WARN]
         issues += [f"{c} — Cost entered on an item rated Not applicable"
                    for c in level3_cost_on_not_applicable(self._project, self.db)
-                   if not any(i.startswith(c[:5] + " ") for i in issues)]
+                   if not any(i.startswith((c + " ", group_of(c) + " ")) for i in issues)]
+        conting_msg, conting_sev = contingency_check(self._project, self.db)
+        if conting_sev == WARN:
+            issues.insert(0, conting_msg)
         if not issues:
             self.lbl_warning.setText("")
             return
@@ -312,8 +317,12 @@ class CostMatrixTab(QWidget):
         self.btn_save.setEnabled(cost_editable)
         if not cost_editable:
             self.lbl_selected.setText(f"{code} — {item.text(COL_TITLE)}\n"
-                                      "Select a Level-2 or Level-3 code to enter costs.")
+                                      "Select an Activity Group or Typical Activity to enter costs.")
             return
+        # Asset recovery (11.04) is income and may be entered as negative amounts.
+        income = is_income_code(code)
+        for sp in (self.sp_labour, self.sp_invest, self.sp_expense, self.sp_conting):
+            sp.setRange(-1e12 if income else 0, 1e12)
         entry = self._entries.get(code, {})
         self.sp_labour.setValue(entry.get("labour_eur", 0.0) or 0.0)
         self.sp_invest.setValue(entry.get("investment_eur", 0.0) or 0.0)
@@ -323,13 +332,14 @@ class CostMatrixTab(QWidget):
         phase_id = entry.get("phase_id")
         idx = self.cb_phase.findData(phase_id) if phase_id else 0
         self.cb_phase.setCurrentIndex(idx if idx >= 0 else 0)
-        self.lbl_selected.setText(f"Editing: {code} — {item.text(COL_TITLE)}")
+        self.lbl_selected.setText(f"Editing: {code} — {item.text(COL_TITLE)}"
+                                  + ("\nAsset recovery is income: enter it as a negative amount." if income else ""))
         self._update_total_label()
 
     def _load_applicability_editor(self, code):
         # Default = what this code would get without a user rating at this exact code.
         overrides_above = {c: o for c, o in self._overrides.items() if c != code}
-        base = effective_applicability(self.facility_type, code, overrides_above)
+        base = effective_applicability(self.facility_type, code, overrides_above, self.strategy)
         text = (f"{code}: default {base['rating']} — {APPLICABILITY_LABELS.get(base['rating'])}"
                 f" ({'inherited user rating' if base['source'] == 'User' else 'facility-type default'})")
         if base["justification"]:

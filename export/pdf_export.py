@@ -23,7 +23,7 @@ from reportlab.graphics.shapes import Drawing, Line, String
 from reportlab.graphics.charts.lineplots import LinePlot
 from reportlab.graphics.widgets.markers import makeMarker
 
-from core.applicability import APPLICABILITY_NOTE, WARN, build_applicability_review
+from core.applicability import APPLICABILITY_NOTE, WARN, build_applicability_review, contingency_check
 from core.calculator import ISDCCalculator, ESTIMATE_ACCURACY, REFERENCE_TARIFFS, REFERENCE_TARIFFS_NOTE
 from core.funding_plan import (
     PLAN_METHOD_NOTE, compute_funding_plan, cost_profile_for_project, inputs_from_project,
@@ -191,11 +191,16 @@ def _build_matrix_tables(db, project_id):
 def build_applicability_section(db, project):
     """Graded-approach table: rating, basis, cost and status for every PA and Level-2 item."""
     rows = build_applicability_review(project, db)
-    n_warn = sum(1 for r in rows if r.severity == WARN)
+    conting_msg, conting_sev = contingency_check(project, db)
+    n_warn = sum(1 for r in rows if r.severity == WARN) + (conting_sev == WARN)
+    colour = "#B03030" if conting_sev == WARN else "#1A3A5C"
     out = [Paragraph("Graded Approach — Applicability of ISDC Activities", H2_STYLE),
            Paragraph(escape(APPLICABILITY_NOTE), ITALIC_STYLE), Spacer(1, 2 * mm),
            Paragraph(f"Facility type: <b>{escape(project.get('facility_type') or '-')}</b> &nbsp;&nbsp; "
+                     f"Strategy: <b>{escape(project.get('strategy') or '-')}</b> &nbsp;&nbsp; "
                      f"Items flagged for review: <b>{n_warn}</b>", NORMAL_STYLE),
+           Paragraph(f"Contingency (cost category): <font color='{colour}'>{escape(conting_msg)}</font>",
+                     NORMAL_STYLE),
            Spacer(1, 2 * mm)]
     data = [[_p(h, CELL_8_WHITE) for h in ("Code", "Activity", "Rating", "Basis", "Cost (EUR)",
                                            "Status / justification")]]

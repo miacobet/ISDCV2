@@ -75,7 +75,7 @@ class TestDatabase(DBTestCase):
         pid, _ = self.new_project()
         self.db.update_project(pid, {"name": "Renamed", "not_a_column": 1})
         self.assertEqual(self.db.get_project(pid)["name"], "Renamed")
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1, 1, 1, 1)
+        self.db.save_cost_entry(pid, "04.0303", 3, 1, 1, 1, 1)
         self.db.delete_project(pid)
         self.assertIsNone(self.db.get_project(pid))
         self.assertEqual(self.db.get_cost_entries(pid), {})
@@ -83,12 +83,12 @@ class TestDatabase(DBTestCase):
 
     def test_cost_entry_upsert(self):
         pid, _ = self.new_project()
-        self.db.save_cost_entry(pid, "03.01.01", 3, 100, 0, 0, 0)
-        self.db.save_cost_entry(pid, "03.01.01", 3, 250, 10, 0, 0, notes="revised")
+        self.db.save_cost_entry(pid, "04.0303", 3, 100, 0, 0, 0)
+        self.db.save_cost_entry(pid, "04.0303", 3, 250, 10, 0, 0, notes="revised")
         entries = self.db.get_cost_entries(pid)
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries["03.01.01"]["labour_eur"], 250)
-        self.assertEqual(entries["03.01.01"]["notes"], "revised")
+        self.assertEqual(entries["04.0303"]["labour_eur"], 250)
+        self.assertEqual(entries["04.0303"]["notes"], "revised")
 
 
 # ---------------------------------------------------------------------
@@ -96,20 +96,20 @@ class TestCalculator(DBTestCase):
     def test_totals_and_accuracy_bounds(self):
         for cls, bounds in ESTIMATE_ACCURACY.items():
             pid, project = self.new_project(estimate_type=cls)
-            self.db.save_cost_entry(pid, "03.01.01", 3, 400, 300, 200, 100)
-            self.db.save_cost_entry(pid, "06.01.01", 3, 1000, 0, 0, 0)
+            self.db.save_cost_entry(pid, "04.0303", 3, 400, 300, 200, 100)
+            self.db.save_cost_entry(pid, "08.0201", 3, 1000, 0, 0, 0)
             f = ISDCCalculator(project, self.db).compute_financials()
             self.assertAlmostEqual(f.grand_total_eur, 2000)
             self.assertAlmostEqual(f.labour_total_eur, 1400)
             self.assertAlmostEqual(f.grand_total_local, 10000)  # rate 5.0
             self.assertAlmostEqual(f.lower_bound, 2000 * (1 + bounds["lower_pct"] / 100))
             self.assertAlmostEqual(f.upper_bound, 2000 * (1 + bounds["upper_pct"] / 100))
-            pa03 = next(p for p in f.pa_totals if p.pa_code == "03")
-            self.assertAlmostEqual(pa03.total_eur, 1000)
+            pa04 = next(p for p in f.pa_totals if p.pa_code == "04")
+            self.assertAlmostEqual(pa04.total_eur, 1000)
 
     def test_bad_rate_falls_back_to_one(self):
         pid, project = self.new_project(local_rate=0)
-        self.db.save_cost_entry(pid, "03.01.01", 3, 100, 0, 0, 0)
+        self.db.save_cost_entry(pid, "04.0303", 3, 100, 0, 0, 0)
         f = ISDCCalculator(project, self.db).compute_financials()
         self.assertAlmostEqual(f.grand_total_local, 100)
 
@@ -119,8 +119,8 @@ class TestCalculator(DBTestCase):
                                  "start_year": 2026, "end_year": 2030})
         self.db.save_phase({"project_id": pid, "phase_name": "B", "phase_type": "Decommissioning",
                             "start_year": 2030, "end_year": 2036})
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1000, 0, 0, 0, phase_id=p1)
-        self.db.save_cost_entry(pid, "06.01.01", 3, 1000, 0, 0, 0)  # unallocated
+        self.db.save_cost_entry(pid, "04.0303", 3, 1000, 0, 0, 0, phase_id=p1)
+        self.db.save_cost_entry(pid, "08.0201", 3, 1000, 0, 0, 0)  # unallocated
         calc = ISDCCalculator(project, self.db)
         profiles = calc.compute_phase_profiles()
         a, b = profiles
@@ -139,7 +139,7 @@ class TestExports(DBTestCase):
         pid, project = self.new_project()
         ph = self.db.save_phase({"project_id": pid, "phase_name": "Dismantling",
                                  "phase_type": "Decommissioning", "start_year": 2027, "end_year": 2035})
-        self.db.save_cost_entry(pid, "03.01.01", 3, 5000, 1000, 500, 650, phase_id=ph)
+        self.db.save_cost_entry(pid, "04.0303", 3, 5000, 1000, 500, 650, phase_id=ph)
         self.db.save_waste_stream({"project_id": pid, "waste_class": "LLW", "description": "Concrete",
                                    "volume_m3": 120.5, "activity_notes": "", "destination": "Repository"})
         return pid
@@ -175,8 +175,8 @@ class TestExports(DBTestCase):
         otherwise the report's matrix does not add up to its grand total."""
         from export.pdf_export import _build_matrix_tables
         pid, project = self.new_project()
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1000, 0, 0, 0)
-        self.db.save_cost_entry(pid, "03.02", 2, 500, 0, 0, 0)  # GUI allows Level-2 entries
+        self.db.save_cost_entry(pid, "04.0303", 3, 1000, 0, 0, 0)
+        self.db.save_cost_entry(pid, "04.0500", 2, 500, 0, 0, 0)  # GUI allows Level-2 entries
         grand = ISDCCalculator(project, self.db).compute_financials().grand_total_eur
         pa_rows = [t._cellvalues[0] for t in _build_matrix_tables(self.db, pid)]
         matrix_sum = sum(float(r[-1].replace(",", "")) for r in pa_rows)
@@ -246,7 +246,7 @@ class TestFundingPlan(DBTestCase):
         from core.funding_plan import levy_for_project
         for ft, expected in (("NPP-PWR", True), ("FCF-UF", False)):
             pid, _ = self.new_project(facility_type=ft, annual_energy_mwh=5e6)
-            self.db.save_cost_entry(pid, "03.01.01", 3, 1e6, 0, 0, 0)
+            self.db.save_cost_entry(pid, "04.0303", 3, 1e6, 0, 0, 0)
             self.db.update_project(pid, {"fp_start_year": 2026, "fp_shutdown_year": 2040,
                                          "fp_return_pct": 3, "fp_escalation_pct": 2})
             self.assertEqual(levy_for_project(self.db.get_project(pid), self.db) is not None, expected, ft)
@@ -265,8 +265,8 @@ class TestFundingPlan(DBTestCase):
         pid, _ = self.new_project()
         ph = self.db.save_phase({"project_id": pid, "phase_name": "D", "phase_type": "Decommissioning",
                                  "start_year": 2040, "end_year": 2045})
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1000, 0, 0, 0, phase_id=ph)
-        self.db.save_cost_entry(pid, "06.01.01", 3, 500, 0, 0, 0)
+        self.db.save_cost_entry(pid, "04.0303", 3, 1000, 0, 0, 0, phase_id=ph)
+        self.db.save_cost_entry(pid, "08.0201", 3, 500, 0, 0, 0)
         profile = cost_profile_for_project(self.db.get_project(pid), self.db)
         self.assertEqual(sorted(profile), list(range(2040, 2045)))
         self.assertAlmostEqual(sum(profile.values()), 1500)
@@ -278,7 +278,7 @@ class TestFundingPlan(DBTestCase):
         pid, _ = self.new_project()
         self.db.save_phase({"project_id": pid, "phase_name": "D", "phase_type": "Decommissioning",
                             "start_year": 2040, "end_year": 2045})
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1e6, 0, 0, 0)
+        self.db.save_cost_entry(pid, "04.0303", 3, 1e6, 0, 0, 0)
         project = self.db.get_project(pid)
         self.assertEqual(build_funding_plan_section(self.db, project), [])  # not set up yet
         self.db.update_project(pid, {"fp_start_year": 2026, "fp_shutdown_year": 2040, "fp_return_pct": 4,
@@ -319,10 +319,11 @@ class TestFacilityProfiles(DBTestCase):
         self.assertFalse(any("reprocessing" in t.lower() for t in seeded["FCF-UF"]))
 
     def test_fuel_fabrication_is_not_a_power_reactor(self):
-        from core.facility_profiles import is_power_reactor, get_code_applicability
+        from core.facility_profiles import is_power_reactor, get_code_applicability as g
         self.assertFalse(is_power_reactor("FCF-UF"))
-        self.assertEqual(get_code_applicability("FCF-UF", "03"), "D")  # process dismantling dominates
-        self.assertEqual(get_code_applicability("FCF-UF", "04"), "D")  # waste dominates
+        self.assertEqual(g("FCF-UF", "04"), "D")         # dismantling in the controlled area dominates
+        self.assertEqual(g("FCF-UF", "05"), "D")         # waste dominates
+        self.assertEqual(g("FCF-UF", "10"), "D")         # uranium inventory
 
     def test_fuel_fabrication_full_workflow_without_power_data(self):
         """Non-power facility: no MWh data; funding plan must not report EUR/MWh, exports must work."""
@@ -333,7 +334,7 @@ class TestFacilityProfiles(DBTestCase):
                                   local_currency="EUR", local_rate=1.0)
         ph = self.db.save_phase({"project_id": pid, "phase_name": "D&D", "phase_type": "Decommissioning",
                                  "start_year": 2032, "end_year": 2038})
-        for code in ("03.02.02", "04.01.03", "08.02.02"):
+        for code in ("04.0601", "05.0903", "10.0101"):
             self.db.save_cost_entry(pid, code, 3, 1e6, 2e5, 1e5, 2e5, phase_id=ph)
         self.db.update_project(pid, {"fp_start_year": 2026, "fp_shutdown_year": 2032, "fp_return_pct": 3.5,
                                      "fp_escalation_pct": 2.5, "fp_frequency": "Quarterly"})
@@ -353,79 +354,102 @@ class TestGradedApproach(DBTestCase):
         from core.applicability import build_applicability_review
         return {r.code: r for r in build_applicability_review(self.db.get_project(pid), self.db)}
 
-    def test_level2_defaults_and_inheritance(self):
+    def test_defaults_and_inheritance(self):
         from core.facility_profiles import get_code_applicability as g
-        self.assertEqual(g("FCF-UF", "08"), "D")
-        self.assertEqual(g("FCF-UF", "08.01"), "N")       # no spent fuel at a fuel fab
-        self.assertEqual(g("FCF-UF", "08.01.02"), "N")    # Level-3 inherits Level-2
-        self.assertEqual(g("FCF-UF", "08.02"), "D")
-        self.assertEqual(g("NPP-PWR", "08.01"), "D")
-        self.assertEqual(g("FCF-REP", "08.01"), "D")
-        self.assertEqual(g("WSF", "08.02.01"), "N")       # inherits PA-level N
+        self.assertEqual(g("FCF-UF", "02.0102"), "N")     # no spent fuel at a fuel fab
+        self.assertEqual(g("FCF-UF", "04.0501"), "N")     # no reactor
+        self.assertEqual(g("NPP-PWR", "04.0504"), "N")    # fuel-cycle-only item at a reactor
+        self.assertEqual(g("NPP-PWR", "10.0100"), "D")
+        self.assertEqual(g("NPP-PWR", "10.0101"), "D")    # Typical Activity inherits Activity Group
+        self.assertEqual(g("FCF-REP", "02.0102"), "D")    # reprocessing handles spent fuel (PA 02 D)
+        self.assertEqual(g("WSF", "10.0101"), "N")        # inherits PA-level N
+        self.assertEqual(g("FCF-UF", "07.0201"), "N")     # no electricity-generating system
         for ft in ("NPP-PWR", "FCF-UF", "WDF"):
-            self.assertEqual(g(ft, "05.03"), "C")         # safe-storage period is conditional
-        self.assertEqual(g("FCF-UF", "03.02.01"), "D")    # no Level-2 rule -> PA rating
+            self.assertEqual(g(ft, "08.0600"), "C")       # contractor items conditional
+            self.assertEqual(g(ft, "10.0200"), "C")       # buffer storage conditional
+        self.assertEqual(g("FCF-UF", "04.0601"), "D")     # no specific rule -> PA rating
+
+    def test_strategy_drives_safe_enclosure(self):
+        from core.facility_profiles import get_code_applicability as g
+        self.assertEqual(g("NPP-PWR", "03"), "C")                                       # strategy unknown
+        self.assertEqual(g("NPP-PWR", "03.0101", "DECON (immediate dismantling)"), "N")
+        self.assertEqual(g("NPP-PWR", "03.0101", "SAFSTOR (deferred dismantling)"), "D")
+        self.assertEqual(g("NPP-PWR", "03", "SAFSTOR (deferred dismantling)"), "D")
+        self.assertEqual(g("NPP-PWR", "03.0301", "SAFSTOR (deferred dismantling)"), "N")
+        self.assertEqual(g("NPP-PWR", "03.0301", "ENTOMBMENT"), "D")
 
     def test_user_override_most_specific_wins_and_reset(self):
         from core.facility_profiles import effective_applicability as eff
         pid, _ = self.new_project(facility_type="FCF-UF")
-        self.db.set_applicability_override(pid, "08", "N", "No nuclear material on site")
-        self.db.set_applicability_override(pid, "08.03", "A", "Safeguards close-out still required")
+        self.db.set_applicability_override(pid, "10", "N", "No nuclear material on site")
+        self.db.set_applicability_override(pid, "10.0300", "A", "Buffer store must be decommissioned")
         ov = self.db.get_applicability_overrides(pid)
-        self.assertEqual(eff("FCF-UF", "08.02", ov)["rating"], "N")    # user PA beats default L2
-        self.assertEqual(eff("FCF-UF", "08.03.01", ov)["rating"], "A")  # more specific user wins
-        self.assertEqual(eff("FCF-UF", "08.03.01", ov)["source"], "User")
-        self.db.set_applicability_override(pid, "08", None)
-        self.assertEqual(eff("FCF-UF", "08.02", self.db.get_applicability_overrides(pid))["rating"], "D")
+        self.assertEqual(eff("FCF-UF", "10.0101", ov)["rating"], "N")    # user PA beats default group rule
+        self.assertEqual(eff("FCF-UF", "10.0301", ov)["rating"], "A")    # more specific user rating wins
+        self.assertEqual(eff("FCF-UF", "10.0301", ov)["source"], "User")
+        self.db.set_applicability_override(pid, "10", None)
+        self.assertEqual(eff("FCF-UF", "10.0101", self.db.get_applicability_overrides(pid))["rating"], "D")
         self.db.delete_project(pid)
         self.assertEqual(self.db.get_applicability_overrides(pid), {})
 
-    def test_contingency_check(self):
+    def test_contingency_is_a_cost_category(self):
+        from core.applicability import contingency_check
         pid, _ = self.new_project(facility_type="FCF-UF")
-        self.assertEqual(self.review(pid)["11"].severity, "warn")       # nothing anywhere
-        self.db.save_cost_entry(pid, "03.02.02", 3, 1000, 0, 0, 150)
-        r = self.review(pid)["11"]
-        self.assertEqual(r.severity, "ok")                              # line contingency covers it
-        self.assertIn("Covered", r.status)
-        self.db.save_cost_entry(pid, "11.01.01", 3, 0, 0, 0, 500)
-        self.assertIn("counted twice", self.review(pid)["11"].status)   # double counting risk
+        self.assertEqual(contingency_check(self.db.get_project(pid), self.db)[1], "info")   # no costs
+        self.db.save_cost_entry(pid, "04.0601", 3, 1000, 0, 0, 0)
+        self.assertEqual(contingency_check(self.db.get_project(pid), self.db)[1], "warn")   # none entered
+        self.db.save_cost_entry(pid, "04.0601", 3, 1000, 0, 0, 150)
+        msg, sev = contingency_check(self.db.get_project(pid), self.db)
+        self.assertEqual(sev, "ok")
+        self.assertIn("15.0%", msg)
 
     def test_review_flags(self):
         pid, _ = self.new_project(facility_type="FCF-UF")
-        self.db.save_cost_entry(pid, "08.01.02", 3, 1000, 0, 0, 0)      # spent fuel transport at a fuel fab
+        self.db.save_cost_entry(pid, "02.0102", 3, 1000, 0, 0, 0)        # defueling at a fuel fab
         rv = self.review(pid)
-        self.assertEqual(rv["08.01"].severity, "warn")
-        self.assertIn("Not applicable", rv["08.01"].status)
-        self.assertEqual(rv["08.02"].severity, "warn")                  # dominant, explicit, empty
-        self.assertEqual(rv["06.02"].severity, "info")                  # inherited M, not flagged per group
-        self.assertEqual(rv["05.03"].severity, "info")                  # conditional
-        self.db.set_applicability_override(pid, "08.02", "A", "Uranium inventory already shipped")
-        self.db.set_applicability_override(pid, "03.02.03", "N", "No large components")
+        self.assertEqual(rv["02.0102"].severity, "warn")
+        self.assertIn("Not applicable", rv["02.0102"].status)
+        self.assertEqual(rv["10.0100"].severity, "warn")                 # dominant, explicit, empty
+        self.assertEqual(rv["08.0200"].severity, "info")                 # inherited M, not flagged per group
+        self.assertEqual(rv["08.0600"].severity, "info")                 # conditional
+        self.db.set_applicability_override(pid, "10.0100", "A", "Uranium inventory already shipped")
+        self.db.set_applicability_override(pid, "04.0602", "N", "No remaining components")
         rv = self.review(pid)
-        self.assertEqual(rv["08.02"].severity, "ok")
-        self.assertEqual(rv["08.02"].source, "User")
-        self.assertIn("03.02.03", rv)                                   # user-rated Level-3 is listed
-        self.assertEqual(rv["03.02.03"].level, 3)
+        self.assertEqual(rv["10.0100"].severity, "ok")
+        self.assertEqual(rv["10.0100"].source, "User")
+        self.assertIn("04.0602", rv)                                     # user-rated activity listed
+        self.assertEqual(rv["04.0602"].level, 3)
 
-    def test_level2_lump_sum_counted_in_review(self):
+    def test_group_lump_sum_counted_in_review(self):
         pid, _ = self.new_project()
-        self.db.save_cost_entry(pid, "03.02", 2, 500, 0, 0, 0)
-        self.assertAlmostEqual(self.review(pid)["03.02"].cost_eur, 500)
-        self.assertAlmostEqual(self.review(pid)["03"].cost_eur, 500)
+        self.db.save_cost_entry(pid, "04.0500", 2, 500, 0, 0, 0)
+        self.assertAlmostEqual(self.review(pid)["04.0500"].cost_eur, 500)
+        self.assertAlmostEqual(self.review(pid)["04"].cost_eur, 500)
+
+    def test_asset_recovery_income_reduces_total(self):
+        from core.isdc_data import is_income_code
+        self.assertTrue(is_income_code("11.0402"))
+        self.assertFalse(is_income_code("11.0301"))
+        pid, project = self.new_project()
+        self.db.save_cost_entry(pid, "04.0303", 3, 1000, 0, 0, 0)
+        self.db.save_cost_entry(pid, "11.0402", 3, 0, 0, -100, 0)
+        self.assertAlmostEqual(ISDCCalculator(project, self.db).compute_financials().grand_total_eur, 900)
+        self.assertEqual(self.review(pid)["11.0400"].status, "Included")
 
     def test_exports_include_applicability(self):
         from openpyxl import load_workbook
         from export.excel_export import export_full_report
         from export.pdf_export import export_pdf_report, build_applicability_section
         pid, _ = self.new_project(facility_type="FCF-UF")
-        self.db.save_cost_entry(pid, "03.02.02", 3, 1000, 0, 0, 100)
+        self.db.save_cost_entry(pid, "04.0601", 3, 1000, 0, 0, 100)
         project = self.db.get_project(pid)
         self.assertTrue(build_applicability_section(self.db, project))
         xlsx = os.path.join(self.tmp, "a.xlsx")
         export_full_report(self.db, pid, xlsx)
         ws = load_workbook(xlsx)["Applicability"]
         codes = [ws.cell(row=r, column=1).value for r in range(6, ws.max_row + 1)]
-        self.assertIn("08.01", codes)
+        self.assertIn("10.0100", codes)
+        self.assertIn("02.0102", codes)                                  # excluded activity listed
         export_pdf_report(self.db, pid, os.path.join(self.tmp, "a.pdf"))
 
     def test_funding_plan_ignores_mwh_for_non_power(self):
@@ -433,6 +457,73 @@ class TestGradedApproach(DBTestCase):
         pid, _ = self.new_project(facility_type="FCF-UF", annual_energy_mwh=5e6)
         self.db.update_project(pid, {"fp_start_year": 2026, "fp_shutdown_year": 2030})
         self.assertEqual(inputs_from_project(self.db.get_project(pid)).annual_energy_mwh, 0)
+
+
+# ---------------------------------------------------------------------
+class TestHierarchyAndMigration(unittest.TestCase):
+    def test_official_isdc_2012_structure(self):
+        from core.isdc_data import ISDC_HIERARCHY as H, code_level, group_of
+        self.assertEqual(len(H), 11)
+        self.assertEqual(H["03"]["title"], "Additional activities for safe enclosure or entombment")
+        self.assertEqual(H["07"]["title"], "Conventional dismantling, demolition and site restoration")
+        self.assertEqual(H["11"]["title"], "Miscellaneous expenditures")
+        self.assertEqual(sum(len(p["groups"]) for p in H.values()), 65)
+        self.assertEqual(sum(len(i) for p in H.values() for _, i in p["groups"].values()), 260)
+        self.assertEqual((code_level("04"), code_level("04.0500"), code_level("04.0501")), (1, 2, 3))
+        self.assertEqual(group_of("04.0501"), "04.0500")
+
+    def test_every_old_code_maps_to_a_valid_new_code(self):
+        from core.isdc_data import ISDC_HIERARCHY as H
+        from core.migration import OLD_L2, OLD_L3, OLD_PA
+        valid = set(H) | {g for p in H.values() for g in p["groups"]} | \
+            {c for p in H.values() for _, i in p["groups"].values() for c, _ in i}
+        for new in list(OLD_L3.values()) + list(OLD_L2.values()) + list(OLD_PA.values()):
+            self.assertIn(new, valid)
+        self.assertEqual(len(OLD_L3), 73)
+
+    def test_migration_of_old_database(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            path = os.path.join(tmp, "old.db")
+            db = DatabaseManager(path)
+            db.initialize()
+            pid = db.create_project(dict(BASE_PROJECT))
+            c = db.conn.cursor()
+            old = [("01.01.01", 3, 100, 0, 0, 0, "plan"), ("01.01.02", 3, 50, 0, 0, 0, "estimate"),
+                   ("11.01.01", 3, 10, 0, 0, 5, ""), ("10.01.01", 3, 0, 0, 30, 0, ""),
+                   ("03.03", 2, 7, 0, 0, 0, "lump")]
+            for code, level, l, i, e, cg, note in old:
+                c.execute("INSERT INTO cost_entries (project_id, isdc_code, level, labour_eur, investment_eur, "
+                          "expenses_eur, contingency_eur, notes) VALUES (?,?,?,?,?,?,?,?)",
+                          (pid, code, level, l, i, e, cg, note))
+            for code in ("08.01", "06", "11"):
+                c.execute("INSERT INTO applicability_overrides VALUES (?,?,?,?)", (pid, code, "A", "why"))
+            db.conn.commit()
+            db.conn.close()
+
+            db = DatabaseManager(path)
+            db.initialize()                                   # runs the migration
+            self.assertTrue(db.last_migration)
+            self.assertTrue(os.path.exists(db.last_migration["backup"]))
+            e = db.get_cost_entries(pid)
+            self.assertEqual(set(e), {"01.0102", "11.0104", "11.0402", "04.0700"})
+            self.assertEqual(e["01.0102"]["labour_eur"], 150)                     # merged
+            self.assertEqual(e["11.0104"]["contingency_eur"], 15)                 # old contingency item
+            self.assertEqual(e["11.0104"]["labour_eur"], 0)
+            self.assertIn("negative", e["11.0402"]["notes"])                     # old income flagged
+            self.assertEqual(e["04.0700"]["level"], 2)
+            ov = db.get_applicability_overrides(pid)
+            self.assertEqual(set(ov), {"10.0100", "08"})                           # old PA 11 dropped
+            self.assertEqual(db.get_level1()[2]["title"],
+                             "Additional activities for safe enclosure or entombment")
+            db.conn.close()
+
+            db = DatabaseManager(path)
+            db.initialize()                                   # second start: nothing to do
+            self.assertIsNone(db.last_migration)
+            db.conn.close()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------
@@ -446,7 +537,7 @@ class TestGUISmoke(DBTestCase):
         QMessageBox.critical = staticmethod(lambda *a, **k: errors.append(a[2] if len(a) > 2 else a))
         try:
             pid, _ = self.new_project()
-            self.db.save_cost_entry(pid, "03.01.01", 3, 100, 0, 0, 0)
+            self.db.save_cost_entry(pid, "04.0303", 3, 100, 0, 0, 0)
             w = MainWindow(self.db)
             w._load_project(pid)
             rt = w.tab_reports  # exercise the Funding Plan sub-tab end to end
@@ -479,7 +570,7 @@ class TestGUISmoke(DBTestCase):
         self.assertTrue(st.inner_tabs.isTabVisible(st._power_tab_index))
         self.assertTrue(rt.inner_tabs.isTabVisible(rt._mwh_tab_index))
         self.assertIn("Funding Plan first", rt.lbl_mwh_result.text())   # levy needs a saved plan
-        self.db.save_cost_entry(npp, "03.01.01", 3, 1e6, 0, 0, 0)
+        self.db.save_cost_entry(npp, "04.0303", 3, 1e6, 0, 0, 0)
         self.db.update_project(npp, {"annual_energy_mwh": 5e6, "user_decom_tariff": 0.01,
                                      "fp_start_year": 2026, "fp_shutdown_year": 2040})
         w._load_project(npp)
@@ -496,28 +587,31 @@ class TestGUISmoke(DBTestCase):
         w = MainWindow(self.db)
         w._load_project(pid)
         mt = w.tab_matrix
-        mt._scroll_to_code("08.01")
-        item = mt.tree.currentItem()
-        self.assertEqual(item.text(2), "N")
+        mt._scroll_to_code("02.0102")
+        self.assertEqual(mt.tree.currentItem().text(2), "N")            # defueling N at a fuel fab
         self.assertIn("need review", mt.lbl_warning.text())
-        mt._scroll_to_code("08.02")
-        self.assertIn("Dominant", mt.tree.currentItem().toolTip(1))  # dominant item without cost flagged
+        mt._scroll_to_code("10.0100")
+        self.assertIn("Dominant", mt.tree.currentItem().toolTip(1))     # dominant item without cost flagged
         mt.cb_appl.setCurrentIndex(mt.cb_appl.findData("A"))
         mt.ed_justification.setText("")
         warned = []
         orig = QMessageBox.warning
         QMessageBox.warning = staticmethod(lambda *a, **k: warned.append(a))
         try:
-            mt._on_save_applicability()                             # refused: no justification
+            mt._on_save_applicability()                                 # refused: no justification
         finally:
             QMessageBox.warning = orig
         self.assertTrue(warned)
         self.assertEqual(self.db.get_applicability_overrides(pid), {})
         mt.ed_justification.setText("Uranium inventory removed during operation")
         mt._on_save_applicability()
-        self.assertEqual(self.db.get_applicability_overrides(pid)["08.02"]["rating"], "A")
+        self.assertEqual(self.db.get_applicability_overrides(pid)["10.0100"]["rating"], "A")
         self.assertEqual(mt.tree.currentItem().text(2), "A *")
         self.assertIn("justified", mt.tree.currentItem().toolTip(1))
+        mt._scroll_to_code("11.0402")                                   # asset recovery accepts negatives
+        self.assertLess(mt.sp_expense.minimum(), 0)
+        mt._scroll_to_code("04.0601")
+        self.assertEqual(mt.sp_expense.minimum(), 0)
         app.processEvents()
         w.close()
 

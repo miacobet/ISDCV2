@@ -13,6 +13,8 @@ Applicability mappings are generic engineering defaults the user should
 review and adjust for their own facility and national requirements.
 """
 
+from core.isdc_data import ancestors, pa_of
+
 # Applicability codes
 M = "M"   # Mandatory
 D = "D"   # Dominant cost driver
@@ -35,35 +37,35 @@ FACILITY_TYPES = {
     "OTHER":     "Other nuclear or radiological facility",
 }
 
-# Default PA-level applicability pattern used as a base before facility-
-# specific overrides below. PA codes follow the ISDC 2012 structure:
+# Default PA-level applicability (ISDC 2012 Principal Activities) used as a
+# base before facility-specific overrides below.
 PA_DEFAULT = {
     "01": D,  # Pre-decommissioning actions
     "02": D,  # Facility shutdown activities
-    "03": D,  # Dismantling activities within the controlled area
-    "04": D,  # Waste processing, storage and disposal
-    "05": A,  # Site infrastructure and operation
-    "06": M,  # Project management, engineering and site support
-    "07": C,  # Research and development
-    "08": C,  # Fuel and nuclear material
-    "09": A,  # Miscellaneous expenditures
-    "10": C,  # Income
-    "11": M,  # Unplanned costs (contingency)
+    "03": C,  # Additional activities for safe enclosure or entombment (depends on strategy)
+    "04": D,  # Dismantling activities within the controlled area
+    "05": D,  # Waste processing, storage and disposal
+    "06": A,  # Site infrastructure and operation
+    "07": A,  # Conventional dismantling, demolition and site restoration
+    "08": M,  # Project management, engineering and support
+    "09": C,  # Research and development
+    "10": C,  # Fuel and nuclear material
+    "11": A,  # Miscellaneous expenditures
 }
 
 # Facility-type overrides at PA level (codes not listed inherit PA_DEFAULT).
 CODE_APPLICABILITY = {
-    "NPP-CANDU": dict(PA_DEFAULT, **{"08": D}),
-    "NPP-PWR":   dict(PA_DEFAULT, **{"08": D}),
-    "NPP-BWR":   dict(PA_DEFAULT, **{"08": D}),
-    "NPP-VVER":  dict(PA_DEFAULT, **{"08": D}),
-    "RR":        dict(PA_DEFAULT, **{"03": A, "08": D, "05": A}),
-    "FCF-UF":    dict(PA_DEFAULT, **{"03": D, "08": D, "04": D}),
-    "FCF-ENR":   dict(PA_DEFAULT, **{"03": D, "08": A, "04": D}),
-    "FCF-REP":   dict(PA_DEFAULT, **{"03": D, "08": D, "04": D}),
-    "WSF":       dict(PA_DEFAULT, **{"02": A, "03": A, "04": D, "08": N}),
-    "SFS":       dict(PA_DEFAULT, **{"02": A, "03": A, "04": D, "08": D}),
-    "WDF":       dict(PA_DEFAULT, **{"02": A, "03": A, "04": D, "08": N}),
+    "NPP-CANDU": dict(PA_DEFAULT, **{"10": D}),
+    "NPP-PWR":   dict(PA_DEFAULT, **{"10": D}),
+    "NPP-BWR":   dict(PA_DEFAULT, **{"10": D}),
+    "NPP-VVER":  dict(PA_DEFAULT, **{"10": D}),
+    "RR":        dict(PA_DEFAULT, **{"04": A, "10": D}),
+    "FCF-UF":    dict(PA_DEFAULT, **{"10": D}),
+    "FCF-ENR":   dict(PA_DEFAULT, **{"10": D}),
+    "FCF-REP":   dict(PA_DEFAULT, **{"10": D}),
+    "WSF":       dict(PA_DEFAULT, **{"02": A, "04": A, "10": N}),
+    "SFS":       dict(PA_DEFAULT, **{"02": A, "04": A, "10": D}),
+    "WDF":       dict(PA_DEFAULT, **{"02": A, "04": A, "07": D, "10": N}),
     "OTHER":     dict(PA_DEFAULT),
 }
 
@@ -169,12 +171,13 @@ def get_profile(facility_type: str) -> str:
 
 
 # ---------------------------------------------------------------------
-# Activity-level (Level-2) defaults for the graded approach
+# Activity-level defaults for the graded approach
 # ---------------------------------------------------------------------
-# Level-3 codes inherit their Level-2 rating; Level-2 codes inherit their
-# PA rating unless listed here. Each entry is (rating, justification).
-# These are generic engineering defaults; users can override any code
-# per project with their own justification.
+# Typical Activities inherit their Activity Group rating, which inherits
+# the Principal Activity rating, unless a more specific rule is listed.
+# Each rule is (rating, justification). PA 03 follows the decommissioning
+# strategy. These are generic engineering defaults; users can override
+# any code per project with their own justification.
 
 APPLICABILITY_LABELS = {
     M: "Mandatory",
@@ -184,81 +187,116 @@ APPLICABILITY_LABELS = {
     N: "Not applicable",
 }
 
+REACTOR_TYPES = {"NPP-CANDU", "NPP-PWR", "NPP-BWR", "NPP-VVER", "RR"}
+FUEL_CYCLE_TYPES = {"FCF-UF", "FCF-ENR", "FCF-REP"}
+NO_SPENT_FUEL_TYPES = {"FCF-UF", "FCF-ENR", "WSF", "WDF"}
+
+_NO_REACTOR = (N, "No reactor at this facility type.")
+_FCF_ONLY = (N, "Applies to fuel cycle facilities only.")
 _NO_SPENT_FUEL = (N, "No irradiated (spent) fuel is handled at this facility type.")
-_SAFE_STORAGE = (C, "Only applies if a deferred-dismantling (safe storage) period is planned.")
+_NO_POWER = (N, "No electricity-generating system at this facility type.")
 
-L2_COMMON = {
-    "05.03": _SAFE_STORAGE,
-}
-
-L2_APPLICABILITY = {
-    "NPP-CANDU": {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
-    "NPP-PWR":   {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
-    "NPP-BWR":   {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
-    "NPP-VVER":  {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
-    "RR":        {"08.01": (A, "Research reactor fuel inventory is usually small.")},
-    "FCF-UF": {
-        "08.01": _NO_SPENT_FUEL,
-        "08.02": (D, "Recovery and disposition of uranium inventory and hold-up in process equipment."),
-    },
-    "FCF-ENR": {
-        "08.01": _NO_SPENT_FUEL,
-        "08.02": (D, "Removal and disposition of UF6 inventory and hold-up."),
-    },
-    "FCF-REP": {
-        "08.01": (D, "Spent fuel receipt and storage pools must be emptied."),
-        "08.02": (D, "Recovery and disposition of separated nuclear materials."),
-    },
-    "SFS": {
-        "08.01": (D, "Spent fuel casks/canisters must be transferred before decommissioning."),
-        "08.02": (C, "Only if special nuclear material other than spent fuel is stored."),
-    },
-    "WDF": {
-        "03.02": (C, "Limited process systems; work is mainly closure and capping."),
-        "04.02": (C, "Interim storage only if operational waste remains at closure."),
-    },
+# Defaults for every facility type (Activity Group or Typical Activity codes).
+ACTIVITY_COMMON = {
+    "07.0600": (C, "Only if the end state is limited or restricted release of the site."),
+    "08.0600": (C, "Only if work is contracted out."),
+    "08.0700": (C, "Only if work is contracted out."),
+    "08.0800": (C, "Only if work is contracted out."),
+    "08.0900": (C, "Only if work is contracted out."),
+    "08.1000": (C, "Only if work is contracted out."),
+    "10.0200": (C, "Only if a dedicated buffer storage for fuel/nuclear material is built."),
+    "10.0300": (C, "Only if a dedicated buffer storage for fuel/nuclear material is built."),
+    "11.0400": (C, "Only if equipment, materials, buildings or the site will be sold or reused."),
 }
 
 
-def default_applicability(facility_type: str, code: str):
+def _activity_defaults(facility_type: str):
+    t = dict(ACTIVITY_COMMON)
+    reactor = facility_type in REACTOR_TYPES
+    if facility_type and not reactor:
+        for code in ("04.0103", "04.0501", "04.0502", "04.0503"):
+            t[code] = _NO_REACTOR
+    if facility_type in REACTOR_TYPES or facility_type in {"WSF", "SFS", "WDF"}:
+        for code in ("02.0506", "04.0104", "04.0504"):
+            t[code] = _FCF_ONLY
+    if facility_type in NO_SPENT_FUEL_TYPES:
+        for code in ("02.0102", "02.0103", "02.0202"):
+            t[code] = _NO_SPENT_FUEL
+    if facility_type and not is_power_reactor(facility_type):
+        t["07.0201"] = _NO_POWER
+    if is_power_reactor(facility_type):
+        t["02.0100"] = (D, "Defueling, spent fuel cooling and plant stabilisation after final shutdown.")
+        t["10.0100"] = (D, "Spent fuel removal from the reactor and pools to external storage.")
+    if facility_type == "RR":
+        t["10.0100"] = (A, "Research reactor fuel inventory is usually small.")
+    if facility_type in ("FCF-UF", "FCF-ENR"):
+        t["05.0200"] = (N, "No high-level waste at this facility type.")
+        t["05.0700"] = (N, "No high-level waste at this facility type.")
+        t["10.0100"] = (D, "Recovery and removal of uranium inventory and hold-up in process equipment.")
+    if facility_type == "FCF-REP":
+        t["10.0100"] = (D, "Removal of spent fuel, separated plutonium/uranium and other nuclear materials.")
+        t["05.0200"] = (D, "Historical/legacy high-level waste (e.g. liquid HLW in tanks).")
+    if facility_type == "SFS":
+        t["10.0100"] = (D, "Spent fuel casks/canisters must be transferred before decommissioning.")
+    if facility_type == "WDF":
+        t["04.0500"] = (C, "Limited process systems; work is mainly closure and capping.")
+    return t
+
+
+def _strategy_defaults(strategy: str):
+    """PA 03 (safe enclosure / entombment) depends on the decommissioning strategy."""
+    s = (strategy or "").upper()
+    if s.startswith("DECON"):
+        return {"03": (N, "Immediate dismantling (DECON): no safe enclosure or entombment.")}
+    if s.startswith("SAFSTOR"):
+        return {"03": (D, "Deferred dismantling (SAFSTOR) with a safe enclosure period."),
+                "03.0100": (D, "Deferred dismantling (SAFSTOR): preparation for safe enclosure."),
+                "03.0200": (D, "Deferred dismantling (SAFSTOR): isolating and securing structures."),
+                "03.0300": (N, "Not an entombment strategy.")}
+    if s.startswith("ENTOMB"):
+        return {"03": (D, "Entombment strategy."),
+                "03.0100": (C, "Only parts of safe-enclosure preparation may be needed.")}
+    return {}
+
+
+def default_applicability(facility_type: str, code: str, strategy: str = None):
     """(rating, justification, rule_code) from the generic defaults.
 
-    rule_code is the code the rating was defined at (PA or Level-2), so
-    callers can tell an explicit rating from an inherited one.
+    The most specific rule wins: Typical Activity, then Activity Group,
+    then Principal Activity. rule_code is the code the rating was defined
+    at, so callers can tell an explicit rating from an inherited one.
     """
-    pa_code = code[:2]
-    l2_code = code[:5] if len(code) >= 5 else None
-    if l2_code:
-        table = dict(L2_COMMON, **L2_APPLICABILITY.get(facility_type, {}))
-        if l2_code in table:
-            rating, why = table[l2_code]
-            return rating, why, l2_code
-    rating = CODE_APPLICABILITY.get(facility_type, PA_DEFAULT).get(pa_code, A)
+    table = dict(_activity_defaults(facility_type), **_strategy_defaults(strategy))
+    for c in ancestors(code):
+        if c in table:
+            rating, why = table[c]
+            return rating, why, c
+    pa = pa_of(code)
+    rating = CODE_APPLICABILITY.get(facility_type, PA_DEFAULT).get(pa, A)
     why = "Not applicable to this facility type." if rating == N else ""
-    return rating, why, pa_code
+    return rating, why, pa
 
 
-def effective_applicability(facility_type: str, code: str, overrides=None):
-    """Applicability of a PA / Level-2 / Level-3 code for a project.
+def effective_applicability(facility_type: str, code: str, overrides=None, strategy: str = None):
+    """Applicability of a Principal Activity / Activity Group / Typical Activity.
 
     overrides: {code: {"rating": str, "justification": str}} set by the user.
     User overrides win over defaults; within each, the most specific code wins.
     Returns dict(rating, justification, source, rule_code).
     """
     overrides = overrides or {}
-    chain = [c for c in (code, code[:5] if len(code) >= 5 else None, code[:2]) if c]
-    for c in dict.fromkeys(chain):
+    for c in ancestors(code):
         o = overrides.get(c)
         if o and o.get("rating"):
             return {"rating": o["rating"], "justification": o.get("justification") or "",
                     "source": "User", "rule_code": c}
-    rating, why, rule = default_applicability(facility_type, code)
+    rating, why, rule = default_applicability(facility_type, code, strategy)
     return {"rating": rating, "justification": why, "source": "Default", "rule_code": rule}
 
 
-def get_code_applicability(facility_type: str, code: str) -> str:
-    """Default rating for a PA, Level-2 or Level-3 code."""
-    return default_applicability(facility_type, code)[0]
+def get_code_applicability(facility_type: str, code: str, strategy: str = None) -> str:
+    """Default rating for a Principal Activity, Activity Group or Typical Activity."""
+    return default_applicability(facility_type, code, strategy)[0]
 
 
 def get_dominant_pas(facility_type: str):

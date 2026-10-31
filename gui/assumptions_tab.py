@@ -37,7 +37,8 @@ class AssumptionsTab(QWidget):
 
         note = QLabel(
             "Checklist of key assumptions that should be documented to support this estimate, "
-            "following the structure of ISDC Appendix B, with additional facility-specific items."
+            "condensed from the topics of ISDC Appendix B, with additional facility-specific items. "
+            "For full coverage, also check against Appendix B of the ISDC publication."
         )
         note.setWordWrap(True)
         note.setStyleSheet("color: #5a7a9a; font-size: 10px; font-style: italic;")

@@ -262,8 +262,8 @@ class ISDCReferenceDialog(QDialog):
         layout = QVBoxLayout(self)
 
         note = QLabel(
-            "NEA/OECD International Structure for Decommissioning Costing (ISDC 2012, NEA No. 7088). "
-            "Verify code titles and scope against the applicable edition of the ISDC publication."
+            "NEA/OECD International Structure for Decommissioning Costing (ISDC 2012, NEA No. 7088), "
+            "Appendix A. Detailed definitions of each item are in Appendix D of the publication."
         )
         note.setWordWrap(True)
         note.setStyleSheet("font-style:italic; color:#5a7a9a; font-size:10px;")

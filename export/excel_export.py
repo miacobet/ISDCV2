@@ -12,7 +12,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-from core.applicability import APPLICABILITY_NOTE, WARN, build_applicability_review
+from core.applicability import APPLICABILITY_NOTE, WARN, build_applicability_review, contingency_check
 from core.calculator import ISDCCalculator, ESTIMATE_ACCURACY
 from core.funding_plan import (
     PLAN_METHOD_NOTE, compute_funding_plan, cost_profile_for_project, inputs_from_project, sensitivity,
@@ -320,7 +320,10 @@ def _write_funding_plan_sheet(wb, db, project):
 def _write_applicability_sheet(wb, db, project):
     ws = wb.create_sheet("Applicability")
     ws.cell(row=1, column=1, value="GRADED APPROACH — APPLICABILITY OF ISDC ACTIVITIES").font = Font(bold=True, size=13)
-    ws.cell(row=2, column=1, value=f"Facility type: {project.get('facility_type') or ''}").font = BOLD
+    conting_msg, _ = contingency_check(project, db)
+    ws.cell(row=2, column=1, value=f"Facility type: {project.get('facility_type') or ''}   "
+                                   f"Strategy: {project.get('strategy') or ''}   "
+                                   f"Contingency: {conting_msg}").font = BOLD
     ws.cell(row=3, column=1, value=APPLICABILITY_NOTE).font = Font(italic=True, size=9)
     ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=7)
     ws.row_dimensions[3].height = 45

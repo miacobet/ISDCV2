@@ -51,9 +51,11 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "About",
             "ISDC Decommissioning Cost Estimation Tool\n\n"
-            "Implements the general structure of the NEA/OECD International Structure "
-            "for Decommissioning Costing (ISDC 2012, NEA No. 7088), with reference to "
-            "IAEA GSG-1 waste classification and related IAEA safety guides.\n\n"
+            "Uses the cost item hierarchy of the NEA/OECD International Structure for "
+            "Decommissioning Costing (ISDC 2012, NEA No. 7088, Appendix A: 11 Principal "
+            "Activities, 65 Activity Groups, 260 Typical Activities) with labour, investment, "
+            "expenses and contingency cost categories, and refers to IAEA GSG-1 waste "
+            "classification and related IAEA safety guides.\n\n"
             "Author: Marian\n\n"
             "This tool is provided as an engineering aid. Users are responsible for "
             "verifying all cost-code definitions, assumptions, and results against "
