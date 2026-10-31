@@ -293,13 +293,24 @@ class TestFacilityProfiles(DBTestCase):
             for pa in ISDC_HIERARCHY:
                 self.assertIn(get_code_applicability(ft, pa), {"M", "D", "A", "C", "N"}, (ft, pa))
 
-    def test_fuel_cycle_facilities_get_fcf_assumptions(self):
-        from core.facility_profiles import FCF_ASSUMPTIONS
+    def test_fuel_cycle_facilities_get_their_own_assumptions(self):
+        from core.facility_profiles import FCF_ASSUMPTIONS, FCF_COMMON_ASSUMPTIONS
+        seeded = {}
         for ft in ("FCF-UF", "FCF-ENR", "FCF-REP"):
             pid, _ = self.new_project(facility_type=ft)
             texts = [r["custom_text"] for r in self.db.get_project_assumptions(pid)
                      if r["section"] == "I. Facility-specific"]
-            self.assertEqual(texts, FCF_ASSUMPTIONS, ft)
+            self.assertEqual(sorted(texts), sorted(FCF_ASSUMPTIONS[ft]), ft)
+            for common in FCF_COMMON_ASSUMPTIONS:
+                self.assertIn(common, texts)
+            seeded[ft] = set(texts) - set(FCF_COMMON_ASSUMPTIONS)
+        # each type has its own specific items, none shared between types
+        self.assertTrue(all(seeded.values()))
+        self.assertFalse(seeded["FCF-UF"] & seeded["FCF-ENR"])
+        self.assertFalse(seeded["FCF-ENR"] & seeded["FCF-REP"])
+        self.assertTrue(any("UF6" in t for t in seeded["FCF-ENR"]))
+        self.assertTrue(any("plutonium" in t for t in seeded["FCF-REP"]))
+        self.assertFalse(any("reprocessing" in t.lower() for t in seeded["FCF-UF"]))
 
     def test_fuel_fabrication_is_not_a_power_reactor(self):
         from core.facility_profiles import is_power_reactor, get_code_applicability

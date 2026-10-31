@@ -89,14 +89,68 @@ SFS_ASSUMPTIONS = [
     "Cask/canister retrieval, inspection, and transport methodology is defined.",
 ]
 
-FCF_ASSUMPTIONS = [
-    "Process-specific contamination profile (e.g. enrichment, conversion, fabrication, "
-    "reprocessing residues) has been characterised.",
+# Items common to all fuel cycle facilities.
+FCF_COMMON_ASSUMPTIONS = [
+    "Process-specific contamination profile has been characterised.",
     "Special nuclear material inventory reconciliation and safeguards termination "
     "approach is defined.",
     "Process equipment decontamination factors and waste classification assumptions "
     "are defined.",
 ]
+
+FCF_UF_ASSUMPTIONS = [
+    "Uranium hold-up in process equipment, ventilation ducts, filters and drains has been "
+    "quantified (e.g. by hold-up measurements) and its recovery method is defined.",
+    "Criticality safety controls (mass/geometry limits) during dismantling of equipment "
+    "containing enriched-uranium hold-up are defined.",
+    "Alpha (uranium) contamination control during dismantling — containment, ventilation "
+    "and respiratory protection — is defined.",
+    "Disposition of residual fuel materials (powder, pellets, scrap, rejected fuel) is defined.",
+    "Chemical and conventional hazards of the process (e.g. HF, ammonia, solvents) have been "
+    "identified for the dismantling work.",
+    "Clearance strategy for uranium-contaminated materials (surface vs. volumetric "
+    "contamination, applicable clearance levels) is defined.",
+    "Soil and groundwater contamination (uranium, process chemicals) is characterised or "
+    "a characterisation programme is costed.",
+] + FCF_COMMON_ASSUMPTIONS
+
+FCF_ENR_ASSUMPTIONS = [
+    "Removal of UF6 inventory from cascades, process piping and cylinders, including "
+    "cylinder heels, is defined.",
+    "Disposition strategy for depleted uranium tails (storage, deconversion, disposal or "
+    "reuse) and responsibility for its cost are defined.",
+    "Uranium deposits (e.g. UO2F2) in process equipment have been quantified, with "
+    "criticality safety controls for enriched deposits.",
+    "Hazards from residual UF6 reacting with moist air (HF release) when process "
+    "equipment is opened are addressed.",
+    "Protection and disposal of sensitive enrichment technology (centrifuges, diffusion "
+    "barriers, design information) meet security and export-control requirements.",
+    "Strategy for the large volume of slightly contaminated metal (decontamination, "
+    "melting/recycling, clearance or disposal) is defined.",
+] + FCF_COMMON_ASSUMPTIONS
+
+FCF_REP_ASSUMPTIONS = [
+    "Highly active liquid waste and process residues in tanks are retrieved and conditioned "
+    "(e.g. vitrified) before decommissioning, or this work is included in the estimate.",
+    "Remote or semi-remote dismantling methods for hot cells and high-dose-rate areas are "
+    "defined, including shielding and tooling.",
+    "Dismantling approach for alpha-contaminated (plutonium, americium) equipment and "
+    "gloveboxes is defined.",
+    "Disposition of separated plutonium and uranium product inventories is defined.",
+    "Criticality safety controls for plutonium and enriched-uranium hold-up are defined.",
+    "Retrieval of legacy wastes (e.g. ponds, silos, historic stores) is defined and "
+    "included where relevant.",
+    "Classification and disposal route for long-lived alpha-bearing and high-level wastes "
+    "are defined, including availability of a disposal facility.",
+    "Chemical hazards (nitric acid, organic solvents, risk of red-oil reactions) are "
+    "addressed for draining and dismantling of process systems.",
+] + FCF_COMMON_ASSUMPTIONS
+
+FCF_ASSUMPTIONS = {
+    "FCF-UF": FCF_UF_ASSUMPTIONS,
+    "FCF-ENR": FCF_ENR_ASSUMPTIONS,
+    "FCF-REP": FCF_REP_ASSUMPTIONS,
+}
 
 WSF_ASSUMPTIONS = [
     "Waste package inventory and condition at the time of decommissioning is defined.",
@@ -221,8 +275,8 @@ def get_facility_specific_assumptions(facility_type: str):
         return CANDU_ASSUMPTIONS
     if facility_type == "SFS":
         return SFS_ASSUMPTIONS
-    if facility_type in ("FCF-UF", "FCF-ENR", "FCF-REP"):
-        return FCF_ASSUMPTIONS
+    if facility_type in FCF_ASSUMPTIONS:
+        return FCF_ASSUMPTIONS[facility_type]
     if facility_type in ("WSF", "WDF"):
         return WSF_ASSUMPTIONS
     return []

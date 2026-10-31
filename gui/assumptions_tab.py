@@ -62,8 +62,17 @@ class AssumptionsTab(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["Documented", "Section", "Assumption", "Notes"])
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.Interactive)
+        self.table.setColumnWidth(1, 170)
+        self.table.setColumnWidth(3, 260)
+        # Long assumption texts wrap onto several lines instead of being cut off with "...".
+        self.table.setWordWrap(True)
+        self.table.setTextElideMode(Qt.ElideNone)
+        header.sectionResized.connect(lambda *_: self.table.resizeRowsToContents())
         self.table.setAlternatingRowColors(True)
         layout.addWidget(self.table)
 
@@ -104,13 +113,17 @@ class AssumptionsTab(QWidget):
             chk.stateChanged.connect(lambda state, rid=r["id"]: self._on_toggle(rid, state))
             self.table.setCellWidget(row, 0, chk)
 
-            self.table.setItem(row, 1, QTableWidgetItem(r.get("section") or ""))
+            sec_item = QTableWidgetItem(r.get("section") or "")
+            sec_item.setToolTip(sec_item.text())
+            self.table.setItem(row, 1, sec_item)
             text = r.get("custom_text")
             if not text:
                 checklist = self.db.get_assumptions_checklist()
                 item = next((c for c in checklist if c["id"] == r.get("checklist_id")), None)
                 text = item["text"] if item else ""
-            self.table.setItem(row, 2, QTableWidgetItem(text))
+            text_item = QTableWidgetItem(text)
+            text_item.setToolTip(text)
+            self.table.setItem(row, 2, text_item)
 
             notes_edit = QLineEdit(r.get("notes") or "")
             notes_edit.editingFinished.connect(
@@ -123,6 +136,7 @@ class AssumptionsTab(QWidget):
             if r.get("documented"):
                 documented_count += 1
 
+        self.table.resizeRowsToContents()
         total = len(rows)
         pct = int(round(100 * documented_count / total)) if total else 0
         self.progress.setValue(pct)
