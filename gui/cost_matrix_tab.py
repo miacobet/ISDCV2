@@ -10,7 +10,7 @@ applicability, with per-entry phase allocation.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QLabel, QGroupBox, QFormLayout, QDoubleSpinBox, QComboBox, QLineEdit,
-    QPushButton, QHeaderView, QMessageBox, QSplitter
+    QPushButton, QHeaderView, QMessageBox, QSplitter, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor
@@ -52,9 +52,15 @@ class CostMatrixTab(QWidget):
         outer.addWidget(self.lbl_warning)
 
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         outer.addWidget(splitter)
+        outer.setStretch(0, 0)
+        outer.setStretch(1, 0)
+        outer.setStretch(2, 1)
 
         self.tree = QTreeWidget()
+        self.tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tree.setMinimumHeight(420)
         self.tree.setHeaderLabels(
             ["Code", "Title", "Labour (EUR)", "Investment (EUR)", "Expenses (EUR)",
              "Contingency (EUR)", "Total (EUR)"]
@@ -67,6 +73,7 @@ class CostMatrixTab(QWidget):
         splitter.addWidget(self.tree)
 
         self.panel = self._build_entry_panel()
+        self.panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         splitter.addWidget(self.panel)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
@@ -74,6 +81,7 @@ class CostMatrixTab(QWidget):
     def _build_entry_panel(self):
         grp = QGroupBox("Cost Entry")
         layout = QVBoxLayout(grp)
+        layout.setAlignment(Qt.AlignTop)
         self.lbl_selected = QLabel("Select a code in the tree.")
         self.lbl_selected.setWordWrap(True)
         layout.addWidget(self.lbl_selected)

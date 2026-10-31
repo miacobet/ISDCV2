@@ -56,6 +56,7 @@ class ProjectSetupTab(QWidget):
         self.inner_tabs = QTabWidget()
         self.inner_tabs.setElideMode(Qt.ElideNone)
         self.inner_tabs.tabBar().setUsesScrollButtons(True)
+        self.inner_tabs.tabBar().setExpanding(False)
         outer.addWidget(self.inner_tabs)
 
         self._build_operator_tab()
