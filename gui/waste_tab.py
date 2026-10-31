@@ -70,7 +70,7 @@ class WasteTab(QWidget):
         layout.addWidget(self.table)
 
         self.lbl_summary = QLabel("")
-        self.lbl_summary.setStyleSheet("font-family: monospace; font-size: 11px;")
+        self.lbl_summary.setStyleSheet("font-family: Menlo, Consolas, \"Courier New\", monospace; font-size: 11px;")
         layout.addWidget(self.lbl_summary)
 
     def load_project(self, project_id: int):

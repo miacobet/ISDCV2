@@ -75,7 +75,7 @@ class PhasesTab(QWidget):
         profile_layout = QVBoxLayout(grp_profile)
         self.lbl_profile = QLabel("Load project to view phase cost profile.")
         self.lbl_profile.setWordWrap(True)
-        self.lbl_profile.setStyleSheet("font-size: 11px; font-family: monospace;")
+        self.lbl_profile.setStyleSheet("font-size: 11px; font-family: Menlo, Consolas, \"Courier New\", monospace;")
         profile_layout.addWidget(self.lbl_profile)
         layout.addWidget(grp_profile)
 

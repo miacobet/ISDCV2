@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
 
         self.tabs.addTab(self.tab_setup, "Project Setup")
         self.tabs.addTab(self.tab_matrix, "ISDC Cost Matrix")
-        self.tabs.addTab(self.tab_phases, "Phases & Timeline")
+        self.tabs.addTab(self.tab_phases, "Phases && Timeline")
         self.tabs.addTab(self.tab_waste, "Waste Streams")
         self.tabs.addTab(self.tab_assumptions, "Assumptions Register")
         self.tabs.addTab(self.tab_reports, "Reports")

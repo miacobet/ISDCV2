@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from core.database import DatabaseManager
-from core.facility_profiles import get_facility_type_list
+from core.facility_profiles import get_facility_type_list, is_power_reactor
 from gui.dialogs import STRATEGIES, PLAN_TYPES, ESTIMATE_TYPES
 
 
@@ -266,7 +266,7 @@ class ProjectSetupTab(QWidget):
             self.sp_user_waste_tariff, "Radioactive waste management levy rate required by your applicable "
             "national legislation, if any."))
 
-        self.inner_tabs.addTab(tab, "Power Unit (MWh)")
+        self._power_tab_index = self.inner_tabs.addTab(tab, "Power Unit (MWh)")
 
     # ------------------------------------------------------------------
     def load_project(self, project_id: int):
@@ -283,6 +283,8 @@ class ProjectSetupTab(QWidget):
             idx = self.cb_facility_disp.findData(p.get("facility_type"))
             if idx >= 0:
                 self.cb_facility_disp.setCurrentIndex(idx)
+            # Graded approach: electricity/levy data only applies to power reactors.
+            self.inner_tabs.setTabVisible(self._power_tab_index, is_power_reactor(p.get("facility_type")))
 
             if p.get("strategy"):
                 self.cb_strategy.setCurrentText(p["strategy"])

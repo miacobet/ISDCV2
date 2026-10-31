@@ -67,6 +67,14 @@ PROJECT_COLUMNS = [
     ("user_waste_tariff", "REAL DEFAULT 0"),
     ("notes", "TEXT"),
     ("author", "TEXT"),
+    # Funding plan inputs (Reports > Funding Plan); all user-entered.
+    ("fp_start_year", "INTEGER"),
+    ("fp_shutdown_year", "INTEGER"),
+    ("fp_opening_balance", "REAL DEFAULT 0"),
+    ("fp_return_pct", "REAL"),
+    ("fp_escalation_pct", "REAL"),
+    ("fp_frequency", "TEXT DEFAULT 'Yearly'"),
+    ("fp_growth_pct", "REAL DEFAULT 0"),
     ("created_at", "TEXT"),
 ]
 
@@ -179,6 +187,16 @@ class DatabaseManager:
             created_at TEXT NOT NULL,
             snapshot_note TEXT,
             grand_total_eur REAL,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        -- Graded approach: per-project applicability overrides with justification.
+        CREATE TABLE IF NOT EXISTS applicability_overrides (
+            project_id INTEGER NOT NULL,
+            code TEXT NOT NULL,
+            rating TEXT NOT NULL,
+            justification TEXT,
+            PRIMARY KEY (project_id, code),
             FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
         );
         """)
@@ -320,7 +338,8 @@ class DatabaseManager:
 
     def delete_project(self, project_id: int):
         c = self.conn.cursor()
-        for table in ("phases", "cost_entries", "project_assumptions", "waste_streams", "estimate_versions"):
+        for table in ("phases", "cost_entries", "project_assumptions", "waste_streams", "estimate_versions",
+                      "applicability_overrides"):
             c.execute(f"DELETE FROM {table} WHERE project_id=?", (project_id,))
         c.execute("DELETE FROM projects WHERE id=?", (project_id,))
         self.conn.commit()
@@ -389,6 +408,32 @@ class DatabaseManager:
             (project_id, isdc_code, level, labour_eur, investment_eur,
              expenses_eur, contingency_eur, phase_id, notes),
         )
+        self.conn.commit()
+
+    # ------------------------------------------------------------------
+    # Applicability overrides (graded approach)
+    # ------------------------------------------------------------------
+    def get_applicability_overrides(self, project_id: int) -> Dict[str, Dict[str, Any]]:
+        c = self.conn.cursor()
+        c.execute("SELECT code, rating, justification FROM applicability_overrides WHERE project_id=?",
+                  (project_id,))
+        return {r["code"]: {"rating": r["rating"], "justification": r["justification"] or ""}
+                for r in c.fetchall()}
+
+    def set_applicability_override(self, project_id: int, code: str,
+                                   rating: Optional[str], justification: str = ""):
+        """Set a user rating for a code; rating=None removes the override (back to default)."""
+        c = self.conn.cursor()
+        if rating:
+            c.execute(
+                """INSERT INTO applicability_overrides (project_id, code, rating, justification)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(project_id, code) DO UPDATE SET
+                     rating=excluded.rating, justification=excluded.justification""",
+                (project_id, code, rating, justification),
+            )
+        else:
+            c.execute("DELETE FROM applicability_overrides WHERE project_id=? AND code=?", (project_id, code))
         self.conn.commit()
 
     # ------------------------------------------------------------------

@@ -114,9 +114,97 @@ def get_profile(facility_type: str) -> str:
     return FACILITY_TYPES.get(facility_type, "Unknown facility type")
 
 
-def get_code_applicability(facility_type: str, pa_code: str) -> str:
-    table = CODE_APPLICABILITY.get(facility_type, PA_DEFAULT)
-    return table.get(pa_code, A)
+# ---------------------------------------------------------------------
+# Activity-level (Level-2) defaults for the graded approach
+# ---------------------------------------------------------------------
+# Level-3 codes inherit their Level-2 rating; Level-2 codes inherit their
+# PA rating unless listed here. Each entry is (rating, justification).
+# These are generic engineering defaults; users can override any code
+# per project with their own justification.
+
+APPLICABILITY_LABELS = {
+    M: "Mandatory",
+    D: "Dominant cost driver",
+    A: "Applicable",
+    C: "Conditional",
+    N: "Not applicable",
+}
+
+_NO_SPENT_FUEL = (N, "No irradiated (spent) fuel is handled at this facility type.")
+_SAFE_STORAGE = (C, "Only applies if a deferred-dismantling (safe storage) period is planned.")
+
+L2_COMMON = {
+    "05.03": _SAFE_STORAGE,
+}
+
+L2_APPLICABILITY = {
+    "NPP-CANDU": {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
+    "NPP-PWR":   {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
+    "NPP-BWR":   {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
+    "NPP-VVER":  {"08.01": (D, "Spent fuel removal from the reactor and pools/dry storage.")},
+    "RR":        {"08.01": (A, "Research reactor fuel inventory is usually small.")},
+    "FCF-UF": {
+        "08.01": _NO_SPENT_FUEL,
+        "08.02": (D, "Recovery and disposition of uranium inventory and hold-up in process equipment."),
+    },
+    "FCF-ENR": {
+        "08.01": _NO_SPENT_FUEL,
+        "08.02": (D, "Removal and disposition of UF6 inventory and hold-up."),
+    },
+    "FCF-REP": {
+        "08.01": (D, "Spent fuel receipt and storage pools must be emptied."),
+        "08.02": (D, "Recovery and disposition of separated nuclear materials."),
+    },
+    "SFS": {
+        "08.01": (D, "Spent fuel casks/canisters must be transferred before decommissioning."),
+        "08.02": (C, "Only if special nuclear material other than spent fuel is stored."),
+    },
+    "WDF": {
+        "03.02": (C, "Limited process systems; work is mainly closure and capping."),
+        "04.02": (C, "Interim storage only if operational waste remains at closure."),
+    },
+}
+
+
+def default_applicability(facility_type: str, code: str):
+    """(rating, justification, rule_code) from the generic defaults.
+
+    rule_code is the code the rating was defined at (PA or Level-2), so
+    callers can tell an explicit rating from an inherited one.
+    """
+    pa_code = code[:2]
+    l2_code = code[:5] if len(code) >= 5 else None
+    if l2_code:
+        table = dict(L2_COMMON, **L2_APPLICABILITY.get(facility_type, {}))
+        if l2_code in table:
+            rating, why = table[l2_code]
+            return rating, why, l2_code
+    rating = CODE_APPLICABILITY.get(facility_type, PA_DEFAULT).get(pa_code, A)
+    why = "Not applicable to this facility type." if rating == N else ""
+    return rating, why, pa_code
+
+
+def effective_applicability(facility_type: str, code: str, overrides=None):
+    """Applicability of a PA / Level-2 / Level-3 code for a project.
+
+    overrides: {code: {"rating": str, "justification": str}} set by the user.
+    User overrides win over defaults; within each, the most specific code wins.
+    Returns dict(rating, justification, source, rule_code).
+    """
+    overrides = overrides or {}
+    chain = [c for c in (code, code[:5] if len(code) >= 5 else None, code[:2]) if c]
+    for c in dict.fromkeys(chain):
+        o = overrides.get(c)
+        if o and o.get("rating"):
+            return {"rating": o["rating"], "justification": o.get("justification") or "",
+                    "source": "User", "rule_code": c}
+    rating, why, rule = default_applicability(facility_type, code)
+    return {"rating": rating, "justification": why, "source": "Default", "rule_code": rule}
+
+
+def get_code_applicability(facility_type: str, code: str) -> str:
+    """Default rating for a PA, Level-2 or Level-3 code."""
+    return default_applicability(facility_type, code)[0]
 
 
 def get_dominant_pas(facility_type: str):
