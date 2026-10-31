@@ -102,6 +102,8 @@ class MainWindow(QMainWindow):
 
         # Workspace tabs
         self.tabs = QTabWidget()
+        self.tabs.setElideMode(Qt.ElideNone)
+        self.tabs.tabBar().setUsesScrollButtons(True)
         self.tab_setup = ProjectSetupTab(self.db, self)
         self.tab_matrix = CostMatrixTab(self.db, self)
         self.tab_phases = PhasesTab(self.db, self)

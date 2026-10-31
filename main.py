@@ -18,7 +18,7 @@ from core.database import DatabaseManager
 from gui.main_window import MainWindow
 
 APP_STYLESHEET = """
-QWidget { font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; }
+QWidget { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; }
 QMainWindow { background-color: #f4f6f9; }
 QGroupBox {
     border: 1px solid #c3cfdd; border-radius: 4px; margin-top: 8px;
@@ -27,25 +27,84 @@ QGroupBox {
 QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }
 QPushButton {
     background-color: #2a5a8c; color: white; border: none;
-    border-radius: 3px; padding: 6px 14px;
+    border-radius: 3px; padding: 7px 16px;
 }
 QPushButton:hover { background-color: #1a3a5c; }
 QPushButton:pressed { background-color: #12283f; }
+QPushButton:focus { outline: none; border: 2px solid #ffb400; }
 QTabWidget::pane { border: 1px solid #c3cfdd; background: white; }
 QTabBar::tab {
-    background: #e8eef5; padding: 7px 14px; border: 1px solid #c3cfdd;
+    background: #e8eef5; padding: 8px 18px; min-width: 90px;
+    border: 1px solid #c3cfdd;
     border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px;
 }
 QTabBar::tab:selected { background: white; font-weight: bold; color: #1a3a5c; }
 QHeaderView::section {
-    background-color: #1a3a5c; color: white; padding: 4px; border: none;
+    background-color: #1a3a5c; color: white; padding: 5px; border: none;
 }
 QTableWidget, QTreeWidget { gridline-color: #d8e0ea; }
+
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QPlainTextEdit {
-    border: 1px solid #c3cfdd; border-radius: 3px; padding: 3px;
-    background: white;
+    border: 1px solid #c3cfdd; border-radius: 3px; padding: 4px;
+    background: white; color: #1a1a1a;
 }
-QLabel[desc="true"] { color: #5a7a9a; font-style: italic; font-size: 10px; }
+QComboBox QAbstractItemView::item { color: #1a1a1a; padding: 4px; }
+QComboBox QAbstractItemView::item:selected { color: white; background: #2a5a8c; }
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+QTextEdit:focus, QPlainTextEdit:focus {
+    border: 2px solid #2a5a8c;
+}
+
+/* --- Spin box up/down buttons: the stylesheet above switches Qt into
+   "styled" rendering, which otherwise hides the native increment/decrement
+   glyphs. Redraw them explicitly as simple triangles so they stay visible
+   on every platform. --- */
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border; subcontrol-position: top right;
+    width: 18px; border-left: 1px solid #c3cfdd; border-bottom: 1px solid #c3cfdd;
+    background: #e8eef5; border-top-right-radius: 3px;
+}
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border; subcontrol-position: bottom right;
+    width: 18px; border-left: 1px solid #c3cfdd; border-top: 1px solid #c3cfdd;
+    background: #e8eef5; border-bottom-right-radius: 3px;
+}
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background: #c3cfdd;
+}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    width: 0; height: 0;
+    border-left: 4px solid transparent; border-right: 4px solid transparent;
+    border-bottom: 6px solid #1a3a5c;
+}
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    width: 0; height: 0;
+    border-left: 4px solid transparent; border-right: 4px solid transparent;
+    border-top: 6px solid #1a3a5c;
+}
+QSpinBox::up-arrow:disabled, QDoubleSpinBox::up-arrow:disabled,
+QSpinBox::down-arrow:disabled, QDoubleSpinBox::down-arrow:disabled {
+    border-bottom-color: #b0b8c0; border-top-color: #b0b8c0;
+}
+
+/* --- Combo box dropdown arrow: same issue as the spin boxes above. --- */
+QComboBox::drop-down {
+    subcontrol-origin: padding; subcontrol-position: top right;
+    width: 22px; border-left: 1px solid #c3cfdd;
+}
+QComboBox::down-arrow {
+    width: 0; height: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid #1a3a5c;
+    margin-right: 6px;
+}
+QComboBox QAbstractItemView {
+    border: 1px solid #c3cfdd; background: white; selection-background-color: #2a5a8c;
+    selection-color: white;
+}
+
+QLabel[desc="true"] { color: #5a7a9a; font-style: italic; font-size: 11px; }
 """
 
 
