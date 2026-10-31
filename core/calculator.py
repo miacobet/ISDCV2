@@ -7,9 +7,8 @@ primary currency; local-currency figures are derived informationally
 using the project's user-entered conversion rate.
 """
 
-import math
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 from core.isdc_data import ISDC_HIERARCHY
 
@@ -282,7 +281,6 @@ class ISDCCalculator:
 
         annual_fund_contribution_eur = remaining_liability_eur / annuity_factor if annuity_factor > 0 else remaining_liability_eur
 
-        total_energy = annual_energy_mwh * years if years > 0 else annual_energy_mwh
         required_levy_eur_per_mwh = (
             annual_fund_contribution_eur / annual_energy_mwh if annual_energy_mwh > 0 else 0.0
         )

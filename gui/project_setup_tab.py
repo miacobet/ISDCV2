@@ -9,13 +9,12 @@ calculation. Every field carries a short description.
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QComboBox,
     QSpinBox, QDoubleSpinBox, QTextEdit, QLabel, QTabWidget, QPushButton,
-    QScrollArea, QGroupBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from core.database import DatabaseManager
-from core.facility_profiles import get_facility_type_list, is_power_reactor
+from core.facility_profiles import get_facility_type_list
 from gui.dialogs import STRATEGIES, PLAN_TYPES, ESTIMATE_TYPES
 
 

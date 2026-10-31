@@ -9,8 +9,8 @@ import datetime
 import traceback
 
 from PyQt5.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QComboBox,
-    QSpinBox, QDoubleSpinBox, QTextEdit, QPushButton, QLabel, QDialogButtonBox,
+    QDialog, QVBoxLayout, QFormLayout, QLineEdit, QComboBox,
+    QSpinBox, QDoubleSpinBox, QPushButton, QLabel, QDialogButtonBox,
     QMessageBox, QTreeWidget, QTreeWidgetItem
 )
 from PyQt5.QtCore import Qt

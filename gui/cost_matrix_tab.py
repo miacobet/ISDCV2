@@ -8,9 +8,9 @@ applicability, with per-entry phase allocation.
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
+    QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
     QLabel, QGroupBox, QFormLayout, QDoubleSpinBox, QComboBox, QLineEdit,
-    QPushButton, QHeaderView, QMessageBox, QSplitter, QSizePolicy
+    QPushButton, QSplitter, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QColor

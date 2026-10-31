@@ -5,20 +5,15 @@ Tab 6 — Reports. Financial Summary, Fund Adequacy, EUR/MWh Levy and
 Export sub-tabs.
 """
 
-import os
-import datetime
-
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QLabel, QFormLayout,
-    QDoubleSpinBox, QPushButton, QGroupBox, QFileDialog, QMessageBox,
-    QLineEdit, QTextEdit
+    QWidget, QVBoxLayout, QTabWidget, QLabel, QFormLayout,
+    QDoubleSpinBox, QPushButton, QFileDialog, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from core.database import DatabaseManager
-from core.calculator import ISDCCalculator, PA_LABELS, REFERENCE_TARIFFS_NOTE
-from core.facility_profiles import is_power_reactor
+from core.calculator import ISDCCalculator, REFERENCE_TARIFFS_NOTE
 from export import excel_export, pdf_export
 
 
@@ -189,7 +184,6 @@ class ReportsTab(QWidget):
             self.sp_mwh_energy.value(), self.sp_mwh_years.value(), self.sp_mwh_fund.value(),
         )
         currency = (project.get("local_currency") or "EUR") if project else "EUR"
-        rate = float(project.get("local_rate") or 1.0) if project else 1.0
         lines = [
             f"Remaining liability:          {result.remaining_liability_eur:>16,.0f} EUR",
             f"Required annual fund contribution: {result.annual_fund_contribution_eur:>12,.0f} EUR",

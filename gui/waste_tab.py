@@ -78,7 +78,6 @@ class WasteTab(QWidget):
         self._refresh()
 
     def _refresh(self):
-        project = self.db.get_project(self.project_id)
         streams = self.db.get_waste_streams(self.project_id)
         self.table.setRowCount(0)
         totals = {}

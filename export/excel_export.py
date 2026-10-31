@@ -9,10 +9,10 @@ optional secondary local-currency column/line for information only.
 import datetime
 
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from core.calculator import ISDCCalculator, PA_LABELS, REFERENCE_TARIFFS_NOTE
+from core.calculator import ISDCCalculator
 from core.isdc_data import ISDC_HIERARCHY
 
 HEADER_FILL = PatternFill("solid", fgColor="1A3A5C")

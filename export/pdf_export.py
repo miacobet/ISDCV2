@@ -17,7 +17,6 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
 
 from core.calculator import ISDCCalculator, REFERENCE_TARIFFS_NOTE
 from core.isdc_data import ISDC_HIERARCHY
