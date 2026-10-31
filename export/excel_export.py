@@ -237,39 +237,6 @@ def _write_assumptions_sheet(wb, db, project_id):
     return ws
 
 
-def _write_fund_note_sheet(wb, project, financials, fund_data):
-    ws = wb.create_sheet("Fund Adequacy Note")
-    ws.cell(row=1, column=1, value="DECOMMISSIONING FUND ADEQUACY NOTE").font = Font(bold=True, size=13)
-    row = 3
-    _meta_row(ws, row, "Project", project.get("name")); row += 1
-    _meta_row(ws, row, "Organisation", project.get("organisation")); row += 1
-    _meta_row(ws, row, "Estimate type", project.get("estimate_type")); row += 1
-    row += 1
-
-    if fund_data:
-        _meta_row(ws, row, "Total estimated cost (EUR)", f"{fund_data['total_estimated_cost_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Costs incurred to date (EUR)", f"{fund_data['costs_incurred_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Remaining liability (EUR)", f"{fund_data['remaining_liability_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "NPV of remaining liability (EUR)", f"{fund_data['npv_remaining_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Lower bound NPV (EUR)", f"{fund_data['lower_bound_npv_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Upper bound NPV (EUR)", f"{fund_data['upper_bound_npv_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Current fund balance (EUR)", f"{fund_data['current_fund_balance_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Shortfall / surplus (EUR)", f"{fund_data['shortfall_surplus_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Required annual provision (EUR/yr)", f"{fund_data['annual_provision_eur']:,.0f}"); row += 1
-        _meta_row(ws, row, "Years remaining", fund_data.get("years_remaining")); row += 1
-    else:
-        ws.cell(row=row, column=1, value="No fund adequacy calculation available for this export.")
-        row += 1
-
-    row += 1
-    ws.cell(row=row, column=1,
-            value="Note: Required contributions are indicative, based on the current estimate's "
-                  "accuracy class and the discount rate defined in the project financial parameters.").font = Font(italic=True, size=9)
-    ws.column_dimensions["A"].width = 35
-    ws.column_dimensions["B"].width = 30
-    return ws
-
-
 def _write_funding_plan_sheet(wb, db, project):
     """Funding plan sheet (numbers stored as numbers so users can chart/extend them)."""
     inp = inputs_from_project(project)
@@ -414,7 +381,7 @@ def export_isdc_matrix(db, project_id, path):
     wb.save(path)
 
 
-def export_full_report(db, project_id, path, fund_data=None):
+def export_full_report(db, project_id, path):
     project = db.get_project(project_id)
     calc = ISDCCalculator(dict(project), db)
     financials = calc.compute_financials()
@@ -427,7 +394,6 @@ def export_full_report(db, project_id, path, fund_data=None):
     _write_phases_sheet(wb, db, project_id, calc)
     _write_waste_sheet(wb, db, project_id)
     _write_assumptions_sheet(wb, db, project_id)
-    _write_fund_note_sheet(wb, project, financials, fund_data)
     _write_funding_plan_sheet(wb, db, project)
     _wrap_text_cells(wb)
     wb.save(path)

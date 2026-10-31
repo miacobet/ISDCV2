@@ -132,24 +132,6 @@ class TestCalculator(DBTestCase):
         self.assertAlmostEqual(sum(p.total_cost_eur for p in profiles), 2000)
         self.assertAlmostEqual(calc.compute_financials().npv_total, a.npv_cost_eur + b.npv_cost_eur)
 
-    def test_fund_adequacy(self):
-        pid, project = self.new_project(discount_rate=3.0)
-        self.db.save_cost_entry(pid, "03.01.01", 3, 1_000_000, 0, 0, 0)
-        r = ISDCCalculator(project, self.db).compute_fund_adequacy(200_000, 300_000, 10)
-        npv = 800_000 / 1.03 ** 10
-        self.assertAlmostEqual(r["remaining_liability_eur"], 800_000)
-        self.assertAlmostEqual(r["npv_remaining_eur"], npv)
-        self.assertAlmostEqual(r["shortfall_surplus_eur"], 300_000 - npv)
-        annuity = (1 - 1.03 ** -10) / 0.03
-        self.assertAlmostEqual(r["annual_provision_eur"], (npv - 300_000) / annuity)
-
-    def test_fund_adequacy_surplus_needs_no_provision(self):
-        pid, project = self.new_project()
-        self.db.save_cost_entry(pid, "03.01.01", 3, 100, 0, 0, 0)
-        r = ISDCCalculator(project, self.db).compute_fund_adequacy(0, 1_000, 5)
-        self.assertEqual(r["annual_provision_eur"], 0)
-        self.assertGreater(r["shortfall_surplus_eur"], 0)
-
     def test_mwh_levy(self):
         pid, project = self.new_project(discount_rate=3.0, local_rate=5.0)
         self.db.save_cost_entry(pid, "03.01.01", 3, 1_000_000, 0, 0, 0)
@@ -170,25 +152,28 @@ class TestExports(DBTestCase):
         self.db.save_cost_entry(pid, "03.01.01", 3, 5000, 1000, 500, 650, phase_id=ph)
         self.db.save_waste_stream({"project_id": pid, "waste_class": "LLW", "description": "Concrete",
                                    "volume_m3": 120.5, "activity_notes": "", "destination": "Repository"})
-        fund = ISDCCalculator(project, self.db).compute_fund_adequacy(0, 1000, 10)
-        return pid, fund
+        return pid
 
     def test_excel_exports_open(self):
         from openpyxl import load_workbook
         from export.excel_export import export_isdc_matrix, export_full_report
-        pid, fund = self._project_with_data()
+        pid = self._project_with_data()
         for fn in (lambda p: export_isdc_matrix(self.db, pid, p),
-                   lambda p: export_full_report(self.db, pid, p, fund_data=fund)):
+                   lambda p: export_full_report(self.db, pid, p)):
             path = os.path.join(self.tmp, "out.xlsx")
             fn(path)
-            self.assertTrue(load_workbook(path).sheetnames)
+            sheets = load_workbook(path).sheetnames
+            self.assertTrue(sheets)
+            self.assertNotIn("Fund Adequacy Note", sheets)  # old method removed
 
     def test_pdf_exports_valid(self):
-        from export.pdf_export import export_pdf_report, export_pdf_fund_note
-        pid, fund = self._project_with_data()
-        for name, fn in (("r.pdf", lambda p: export_pdf_report(self.db, pid, p, fund_data=fund)),
-                         ("r2.pdf", lambda p: export_pdf_report(self.db, pid, p)),
-                         ("f.pdf", lambda p: export_pdf_fund_note(self.db, pid, p, fund))):
+        from export.pdf_export import export_pdf_report, export_pdf_funding_plan_note
+        pid = self._project_with_data()
+        self.db.update_project(pid, {"fp_start_year": 2026, "fp_shutdown_year": 2027,
+                                     "fp_return_pct": 3, "fp_escalation_pct": 2})
+        for name, fn in (("r.pdf", lambda p: export_pdf_report(self.db, pid, p)),
+                         ("r2.pdf", lambda p: export_pdf_report(self.db, pid, p, include_matrix=False)),
+                         ("f.pdf", lambda p: export_pdf_funding_plan_note(self.db, pid, p))):
             path = os.path.join(self.tmp, name)
             fn(path)
             with open(path, "rb") as fh:

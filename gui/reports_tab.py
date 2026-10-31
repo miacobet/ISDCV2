@@ -1,8 +1,8 @@
 """
 gui/reports_tab.py
 ====================
-Tab 6 — Reports. Financial Summary, Fund Adequacy, EUR/MWh Levy and
-Export sub-tabs.
+Tab 6 — Reports. Financial Summary, Funding Plan, EUR/MWh Levy (power
+reactors only) and Export sub-tabs.
 """
 
 import datetime
@@ -26,19 +26,11 @@ from export import excel_export, pdf_export
 
 
 class ReportsTab(QWidget):
-    _costs_incurred_eur = 0.0
-    _fund_balance_eur = 0.0
-    _years_remaining = 0.0
-
     def __init__(self, db: DatabaseManager, parent=None):
         super().__init__(parent)
         self.db = db
         self.main_window = parent
         self.project_id = None
-        self._costs_incurred_eur = 0.0
-        self._fund_balance_eur = 0.0
-        self._years_remaining = 0.0
-        self._last_fund_result = None
         self._build_ui()
 
     def _build_ui(self):
@@ -56,7 +48,6 @@ class ReportsTab(QWidget):
         outer.addWidget(self.inner_tabs)
 
         self._build_financial_summary_tab()
-        self._build_fund_adequacy_tab()
         self._build_funding_plan_tab()
         self._build_mwh_tab()
         self._build_export_tab()
@@ -71,39 +62,6 @@ class ReportsTab(QWidget):
         layout.addWidget(self.lbl_summary)
         layout.addStretch()
         self.inner_tabs.addTab(tab, "Financial Summary")
-
-    def _build_fund_adequacy_tab(self):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        form = QFormLayout()
-
-        self.sp_costs_incurred = QDoubleSpinBox()
-        self.sp_costs_incurred.setRange(0, 1e13)
-        self.sp_costs_incurred.setSuffix(" EUR")
-        form.addRow("Costs incurred to date", self.sp_costs_incurred)
-
-        self.sp_fund_balance = QDoubleSpinBox()
-        self.sp_fund_balance.setRange(0, 1e13)
-        self.sp_fund_balance.setSuffix(" EUR")
-        form.addRow("Current fund balance", self.sp_fund_balance)
-
-        self.sp_years_remaining = QDoubleSpinBox()
-        self.sp_years_remaining.setRange(0, 200)
-        self.sp_years_remaining.setDecimals(1)
-        form.addRow("Years remaining to completion", self.sp_years_remaining)
-
-        layout.addLayout(form)
-
-        btn = QPushButton("Calculate Fund Adequacy")
-        btn.clicked.connect(self._on_fund_tab_calculate)
-        layout.addWidget(btn)
-
-        self.lbl_fund_result = QLabel("")
-        self.lbl_fund_result.setWordWrap(True)
-        self.lbl_fund_result.setStyleSheet("font-family: Menlo, Consolas, \"Courier New\", monospace; font-size: 11px;")
-        layout.addWidget(self.lbl_fund_result)
-        layout.addStretch()
-        self.inner_tabs.addTab(tab, "Fund Adequacy")
 
     def _build_funding_plan_tab(self):
         tab = QWidget()
@@ -318,7 +276,7 @@ class ReportsTab(QWidget):
         btn_full_pdf.clicked.connect(self._on_export_full_pdf)
         layout.addWidget(btn_full_pdf)
 
-        btn_fund_pdf = QPushButton("Export Fund Adequacy Note (.pdf)")
+        btn_fund_pdf = QPushButton("Export Funding Plan Note (.pdf)")
         btn_fund_pdf.clicked.connect(self._on_export_fund_pdf)
         layout.addWidget(btn_fund_pdf)
 
@@ -370,29 +328,6 @@ class ReportsTab(QWidget):
             f"  Radioactive waste: {result.reference_waste_tariff_low:.2f} - {result.reference_waste_tariff_high:.2f} EUR/MWh",
         ]
         self.lbl_mwh_result.setText("\n".join(lines))
-
-    def _on_fund_tab_calculate(self):
-        self._costs_incurred_eur = self.sp_costs_incurred.value()
-        self._fund_balance_eur = self.sp_fund_balance.value()
-        self._years_remaining = self.sp_years_remaining.value()
-        calc, project = self._get_calc()
-        result = calc.compute_fund_adequacy(
-            self._costs_incurred_eur, self._fund_balance_eur, self._years_remaining
-        )
-        self._last_fund_result = result
-        lines = [
-            f"Total estimated cost:        {result['total_estimated_cost_eur']:>16,.0f} EUR",
-            f"Costs incurred to date:      {result['costs_incurred_eur']:>16,.0f} EUR",
-            f"Remaining liability:         {result['remaining_liability_eur']:>16,.0f} EUR",
-            f"NPV of remaining liability:  {result['npv_remaining_eur']:>16,.0f} EUR",
-            f"  Lower bound:               {result['lower_bound_npv_eur']:>16,.0f} EUR",
-            f"  Upper bound:               {result['upper_bound_npv_eur']:>16,.0f} EUR",
-            f"Current fund balance:        {result['current_fund_balance_eur']:>16,.0f} EUR",
-            f"Shortfall / surplus:         {result['shortfall_surplus_eur']:>16,.0f} EUR",
-            f"Required annual provision:   {result['annual_provision_eur']:>16,.0f} EUR/yr",
-        ]
-        self.lbl_fund_result.setText("\n".join(lines))
-        return result
 
     def _on_calculate(self):
         if not self.project_id:
@@ -456,8 +391,7 @@ class ReportsTab(QWidget):
         if not path:
             return
         try:
-            fund_data = self._last_fund_result
-            excel_export.export_full_report(self.db, self.project_id, path, fund_data=fund_data)
+            excel_export.export_full_report(self.db, self.project_id, path)
             self.lbl_export_status.setText(f"Exported: {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Export failed", str(exc))
@@ -469,7 +403,7 @@ class ReportsTab(QWidget):
         if not path:
             return
         try:
-            pdf_export.export_pdf_report(self.db, self.project_id, path, fund_data=self._last_fund_result)
+            pdf_export.export_pdf_report(self.db, self.project_id, path)
             self.lbl_export_status.setText(f"Exported: {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Export failed", str(exc))
@@ -477,12 +411,16 @@ class ReportsTab(QWidget):
     def _on_export_fund_pdf(self):
         if not self.project_id:
             return
-        result = self._on_fund_tab_calculate()
-        path = self._choose_save_path("fund_adequacy_note.pdf", "PDF Files (*.pdf)")
+        project = self.db.get_project(self.project_id)
+        if not (project and project.get("fp_shutdown_year")):
+            QMessageBox.information(self, "Funding plan",
+                                    "Set up and save the funding plan first (Reports > Funding Plan).")
+            return
+        path = self._choose_save_path("funding_plan_note.pdf", "PDF Files (*.pdf)")
         if not path:
             return
         try:
-            pdf_export.export_pdf_fund_note(self.db, self.project_id, path, result)
+            pdf_export.export_pdf_funding_plan_note(self.db, self.project_id, path)
             self.lbl_export_status.setText(f"Exported: {path}")
         except Exception as exc:
             QMessageBox.critical(self, "Export failed", str(exc))

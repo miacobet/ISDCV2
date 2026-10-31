@@ -3,9 +3,9 @@ export/pdf_export.py
 ======================
 PDF export for the ISDC Decommissioning Cost Estimation Tool, using
 reportlab. Produces a full report (cover, financial summary, ISDC
-matrix by Principal Activity, phase profile, fund adequacy note,
-EUR/MWh levy, assumptions completeness) or a standalone fund
-adequacy note.
+matrix by Principal Activity, graded-approach applicability, phase
+profile, funding plan, EUR/MWh levy note for power reactors,
+assumptions completeness) or a standalone funding plan note.
 """
 
 import datetime
@@ -250,31 +250,6 @@ def _build_phase_table(calc):
     return table
 
 
-def _build_fund_table(fund_data):
-    if not fund_data:
-        return None
-    rows = [
-        ["Total estimated cost", _money(fund_data["total_estimated_cost_eur"])],
-        ["Costs incurred to date", _money(fund_data["costs_incurred_eur"])],
-        ["Remaining liability", _money(fund_data["remaining_liability_eur"])],
-        ["NPV of remaining liability", _money(fund_data["npv_remaining_eur"])],
-        ["Lower bound NPV", _money(fund_data["lower_bound_npv_eur"])],
-        ["Upper bound NPV", _money(fund_data["upper_bound_npv_eur"])],
-        ["Current fund balance", _money(fund_data["current_fund_balance_eur"])],
-        ["Shortfall / surplus", _money(fund_data["shortfall_surplus_eur"])],
-        ["Required annual provision (EUR/yr)", _money(fund_data["annual_provision_eur"])],
-        ["Years remaining", str(fund_data.get("years_remaining", ""))],
-    ]
-    table = Table(rows, colWidths=[80 * mm, 80 * mm])
-    table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("BACKGROUND", (0, 0), (0, -1), BLUE3),
-    ]))
-    return table
-
-
 def _kv_table(rows, highlight_rows=()):
     table = Table([[_p(k, CELL_9), _p(v, CELL_9)] for k, v in rows], colWidths=[95 * mm, 70 * mm])
     style = [
@@ -418,7 +393,7 @@ def _build_assumptions_summary(db, project_id):
 # Public API
 # ---------------------------------------------------------------------
 
-def export_pdf_report(db, project_id, path, fund_data=None, include_matrix=True):
+def export_pdf_report(db, project_id, path, include_matrix=True):
     project = db.get_project(project_id)
     calc = ISDCCalculator(dict(project), db)
     financials = calc.compute_financials()
@@ -458,13 +433,6 @@ def export_pdf_report(db, project_id, path, fund_data=None, include_matrix=True)
     story.append(phase_table if phase_table else Paragraph("No phases defined.", NORMAL_STYLE))
     story.append(Spacer(1, 6 * mm))
 
-    story.append(Paragraph("Decommissioning Fund Adequacy Note", H2_STYLE))
-    story.append(Spacer(1, 2 * mm))
-    fund_table = _build_fund_table(fund_data)
-    story.append(fund_table if fund_table else Paragraph(
-        "No fund adequacy calculation available for this export.", NORMAL_STYLE))
-    story.append(Spacer(1, 6 * mm))
-
     plan = build_funding_plan_section(db, project)
     if plan:
         story.append(PageBreak())
@@ -482,28 +450,19 @@ def export_pdf_report(db, project_id, path, fund_data=None, include_matrix=True)
     doc.build(story, onFirstPage=hf.on_first_page, onLaterPages=hf.on_later_pages)
 
 
-def export_pdf_fund_note(db, project_id, path, fund_data):
+def export_pdf_funding_plan_note(db, project_id, path):
+    """Standalone note: project cover table plus the funding plan section."""
     project = db.get_project(project_id)
     doc = SimpleDocTemplate(path, pagesize=A4, topMargin=25 * mm, bottomMargin=20 * mm,
                              leftMargin=18 * mm, rightMargin=18 * mm)
     hf = _HeaderFooter(project.get("name") or "")
     story = [
-        Paragraph("DECOMMISSIONING FUND ADEQUACY NOTE", TITLE_STYLE),
+        Paragraph("Decommissioning Funding Plan Note", TITLE_STYLE),
         Spacer(1, 6 * mm),
         _build_cover_table(project),
-        Spacer(1, 6 * mm),
-        Paragraph("Fund Adequacy Assessment", H2_STYLE),
-        Spacer(1, 2 * mm),
+        PageBreak(),
     ]
-    fund_table = _build_fund_table(fund_data)
-    story.append(fund_table if fund_table else Paragraph("No data provided.", NORMAL_STYLE))
-    story.append(Spacer(1, 6 * mm))
-    story.append(Paragraph(
-        "Required contributions are indicative, based on the current estimate's accuracy "
-        "class and the discount rate defined in the project financial parameters.",
-        ITALIC_STYLE))
     plan = build_funding_plan_section(db, project)
-    if plan:
-        story.append(PageBreak())
-        story.extend(plan)
+    story.extend(plan if plan else [Paragraph(
+        "No funding plan has been set up for this project (Reports > Funding Plan).", NORMAL_STYLE)])
     doc.build(story, onFirstPage=hf.on_first_page, onLaterPages=hf.on_later_pages)

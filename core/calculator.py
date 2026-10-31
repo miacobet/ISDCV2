@@ -227,44 +227,6 @@ class ISDCCalculator:
         return profiles
 
     # ------------------------------------------------------------------
-    def compute_fund_adequacy(self, costs_incurred_eur: float, fund_balance_eur: float,
-                               years_remaining: float) -> Dict[str, Any]:
-        financials = self.compute_financials()
-        total_estimated_cost_eur = financials.grand_total_eur
-        remaining_liability_eur = max(total_estimated_cost_eur - costs_incurred_eur, 0.0)
-
-        discount_rate = self._discount_rate()
-        years_remaining = max(years_remaining, 0.0)
-        npv_remaining_eur = remaining_liability_eur / ((1 + discount_rate) ** years_remaining) \
-            if years_remaining > 0 else remaining_liability_eur
-
-        bounds = ESTIMATE_ACCURACY.get(financials.accuracy_class, ESTIMATE_ACCURACY["Budgetary"])
-        lower_bound_npv_eur = npv_remaining_eur * (1 + bounds["lower_pct"] / 100.0)
-        upper_bound_npv_eur = npv_remaining_eur * (1 + bounds["upper_pct"] / 100.0)
-
-        shortfall_surplus_eur = fund_balance_eur - npv_remaining_eur
-
-        if years_remaining > 0 and discount_rate > 0:
-            annuity_factor = (1 - (1 + discount_rate) ** (-years_remaining)) / discount_rate
-        else:
-            annuity_factor = years_remaining if years_remaining > 0 else 1.0
-        funding_gap_eur = max(npv_remaining_eur - fund_balance_eur, 0.0)
-        annual_provision_eur = funding_gap_eur / annuity_factor if annuity_factor > 0 else funding_gap_eur
-
-        return {
-            "total_estimated_cost_eur": total_estimated_cost_eur,
-            "costs_incurred_eur": costs_incurred_eur,
-            "remaining_liability_eur": remaining_liability_eur,
-            "npv_remaining_eur": npv_remaining_eur,
-            "lower_bound_npv_eur": lower_bound_npv_eur,
-            "upper_bound_npv_eur": upper_bound_npv_eur,
-            "current_fund_balance_eur": fund_balance_eur,
-            "shortfall_surplus_eur": shortfall_surplus_eur,
-            "annual_provision_eur": annual_provision_eur,
-            "years_remaining": years_remaining,
-        }
-
-    # ------------------------------------------------------------------
     def compute_mwh_levy(self, annual_energy_mwh: float, remaining_operational_years: float,
                           current_fund_balance_eur: float, user_decom_tariff: float = 0.0,
                           user_waste_tariff: float = 0.0) -> MWhCalculation:
